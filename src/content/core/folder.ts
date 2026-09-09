@@ -2,6 +2,27 @@ import type { TreeNodeItem } from '@/shared/types'
 
 const MD_EXTENSIONS = ['.md', '.mkd', '.markdown', '.txt', '.mdx', '.mdc']
 
+// 同一目录在筛选、展开和返回上级导航时可能被重复读取；缓存本次页面会话内的响应，避免重复网络往返。
+const DIRECTORY_CACHE_TTL_MS = 30_000
+const directoryHtmlCache = new Map<string, { expiresAt: number; request: Promise<string> }>()
+
+function fetchDirectoryHtml(url: string): Promise<string> {
+  const normalizedUrl = url.endsWith('/') ? url : `${url}/`
+  const cached = directoryHtmlCache.get(normalizedUrl)
+  if (cached && cached.expiresAt > Date.now()) return cached.request
+
+  const request = new Promise<string>((resolve) => {
+    chrome.runtime.sendMessage({ type: 'bg-fetch', url: normalizedUrl }, (res) => {
+      resolve(res?.ok ? res.res || '' : '')
+    })
+  })
+  directoryHtmlCache.set(normalizedUrl, { expiresAt: Date.now() + DIRECTORY_CACHE_TTL_MS, request })
+  request.then((html) => {
+    if (!html) directoryHtmlCache.delete(normalizedUrl)
+  })
+  return request
+}
+
 export function getParentFolderURL(currentUrl?: string): string {
   const target = currentUrl || window.location.href
   if (target.endsWith('/')) {
@@ -40,10 +61,7 @@ async function hasMarkdownContent(folderUrl: string, depth = 0): Promise<boolean
   const url = folderUrl.endsWith('/') ? folderUrl : `${folderUrl}/`
 
   try {
-    const response: { ok: boolean; res?: string } = await new Promise((resolve) => {
-      chrome.runtime.sendMessage({ type: 'bg-fetch', url }, (res) => resolve(res || { ok: false }))
-    })
-    const html = response.res || ''
+    const html = await fetchDirectoryHtml(url)
     if (!html) return false
 
     const rowRegex = /addRow\("(.*?)",\s*"(.*?)",\s*(\d+),\s*(\d+),\s*"([\d.]+ [BkMG]B?)",\s*(\d+),\s*"(.*?)"\);/g
@@ -84,13 +102,7 @@ export async function fetchDirectory(
   let html = ''
 
   try {
-    const response: { ok: boolean; res?: string } = await new Promise((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: 'bg-fetch', url },
-        (res) => resolve(res || { ok: false })
-      )
-    })
-    html = response.res || ''
+    html = await fetchDirectoryHtml(url)
   } catch (e) {
     console.error('[MarkCraft] Failed to fetch directory:', e)
     return []
