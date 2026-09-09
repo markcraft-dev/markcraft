@@ -1,4 +1,5 @@
 import type { TreeNodeItem } from '@/shared/types'
+import { parseDirectory, type ParsedDirectoryItem } from './wasm_directory'
 
 const MD_EXTENSIONS = ['.md', '.mkd', '.markdown', '.txt', '.mdx', '.mdc']
 
@@ -64,13 +65,11 @@ async function hasMarkdownContent(folderUrl: string, depth = 0): Promise<boolean
     const html = await fetchDirectoryHtml(url)
     if (!html) return false
 
-    const rowRegex = /addRow\("(.*?)",\s*"(.*?)",\s*(\d+),\s*(\d+),\s*"([\d.]+ [BkMG]B?)",\s*(\d+),\s*"(.*?)"\);/g
-    let match: RegExpExecArray | null
     const subfolders: string[] = []
 
-    while ((match = rowRegex.exec(html)) !== null) {
-      const name = match[1]
-      const isFolder = !!Number.parseInt(match[3])
+    for (const item of await parseDirectory(html)) {
+      const name = item.name
+      const isFolder = item.is_folder
       const lowerName = (name || '').toLowerCase()
 
       if (!isFolder && MD_EXTENSIONS.some((ext) => lowerName.endsWith(ext))) {
@@ -78,7 +77,7 @@ async function hasMarkdownContent(folderUrl: string, depth = 0): Promise<boolean
       }
 
       if (isFolder && !name.startsWith('.')) {
-        subfolders.push(`${url}${match[2]}`)
+        subfolders.push(`${url}${item.path}`)
       }
     }
 
@@ -116,13 +115,10 @@ export async function fetchDirectory(
     return []
   }
 
-  const rowRegex = /addRow\("(.*?)",\s*"(.*?)",\s*(\d+),\s*(\d+),\s*"([\d.]+ [BkMG]B?)",\s*(\d+),\s*"(.*?)"\);/g
   const rawItems: any[] = []
-  let match: RegExpExecArray | null
-
-  while ((match = rowRegex.exec(html)) !== null) {
-    const name = match[1]
-    const isFolder = !!Number.parseInt(match[3])
+  for (const item of await parseDirectory(html)) {
+    const name = item.name
+    const isFolder = item.is_folder
     const lowerName = (name || '').toLowerCase()
 
     if (name.startsWith('.')) {
@@ -135,12 +131,12 @@ export async function fetchDirectory(
 
     rawItems.push({
       name,
-      path: match[2],
+      path: item.path,
       isFolder,
-      size: Number.parseInt(match[4]),
-      sizeUnit: match[5],
-      timestamp: Number.parseInt(match[6]),
-      date: new Date(match[7]),
+      size: item.size,
+      sizeUnit: item.size_unit,
+      timestamp: item.timestamp,
+      date: new Date(item.date),
       parentPath: url
     })
   }
