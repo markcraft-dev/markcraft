@@ -7,7 +7,7 @@
     <div class="p-10px px-14px border-b border-[--border-color] flex flex-col gap-6px bg-[--bg-card]">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-6px">
-          <IconOutline class="w-4 h-4 text-[--primary-color]" />
+          <SvgIcon name="outline" class="w-4 h-4 text-[--primary-color]"  />
           <span class="text-12px font-bold text-[--text-primary] tracking-tight">文章大纲</span>
           <span v-if="outlineList.length > 0" class="text-10px font-mono text-[--text-muted] px-5px py-1px rounded bg-[--bg-subtle]">
             {{ outlineList.length }}
@@ -23,7 +23,7 @@
 
       <!-- Outline Filter Input (Appears when outline is long > 8) -->
       <div v-if="outlineList.length > 8" class="relative flex items-center w-full mt-2px">
-        <IconSearch class="absolute left-8px w-3 h-3 text-[--text-muted] pointer-events-none" />
+        <SvgIcon name="search" class="absolute left-8px w-3 h-3 text-[--text-muted] pointer-events-none"  />
         <input
           v-model="filterKey"
           type="text"
@@ -36,7 +36,7 @@
           title="清空"
           @click="filterKey = ''"
         >
-          <IconClose class="w-2.5 h-2.5" />
+          <SvgIcon name="close" class="w-2.5 h-2.5"  />
         </button>
       </div>
     </div>
@@ -47,7 +47,7 @@
       class="outline-scroll-container flex-1 overflow-y-auto p-8px space-y-1px"
     >
       <div v-if="filteredOutline.length === 0" class="flex flex-col items-center justify-center p-28px text-center text-12px text-[--text-muted]">
-        <IconOutline class="w-7 h-7 mb-6px opacity-25 text-[--text-muted]" />
+        <SvgIcon name="outline" class="w-7 h-7 mb-6px opacity-25 text-[--text-muted]"  />
         <span>{{ filterKey ? '未找到匹配章节' : '当前文档暂无标题' }}</span>
       </div>
 
@@ -75,10 +75,8 @@
 </template>
 
 <script setup lang="ts">
+import SvgIcon from '@/components/SvgIcon.vue'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import IconOutline from '@/components/icons/IconOutline.vue'
-import IconSearch from '@/components/icons/IconSearch.vue'
-import IconClose from '@/components/icons/IconClose.vue'
 import type { OutlineItem } from '@/shared/types'
 
 const props = withDefaults(

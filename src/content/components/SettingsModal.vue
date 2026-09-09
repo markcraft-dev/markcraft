@@ -13,7 +13,7 @@
         <div class="flex items-center justify-between px-20px py-16px border-b border-[--border-color] bg-[--bg-subtle]">
           <div class="flex items-center gap-10px">
             <div class="p-6px rounded-lg bg-[--primary-light] text-[--primary-color]">
-              <IconSettings class="w-4.5 h-4.5" />
+              <SvgIcon name="settings" class="w-4.5 h-4.5"  />
             </div>
             <h2 class="text-15px font-bold text-[--text-primary]">MarkCraft 偏好设置</h2>
           </div>
@@ -22,7 +22,7 @@
             title="关闭设置 (Esc)"
             @click="$emit('close')"
           >
-            <IconClose class="w-4 h-4" />
+            <SvgIcon name="close" class="w-4 h-4"  />
           </button>
         </div>
 
@@ -39,9 +39,9 @@
                 :class="settings.pageTheme === mode ? 'bg-[--bg-page] text-[--primary-color] font-semibold shadow-sm' : 'bg-transparent text-[--text-secondary] hover:text-[--text-primary]'"
                 @click="setTheme(mode)"
               >
-                <IconDeviceAuto v-if="mode === 'auto'" class="w-3.5 h-3.5" />
-                <IconSun v-else-if="mode === 'light'" class="w-3.5 h-3.5 text-amber-500" />
-                <IconMoon v-else class="w-3.5 h-3.5 text-indigo-400" />
+                <SvgIcon name="device-auto" v-if="mode === 'auto'" class="w-3.5 h-3.5"  />
+                <SvgIcon name="sun" v-else-if="mode === 'light'" class="w-3.5 h-3.5 text-amber-500"  />
+                <SvgIcon name="moon" v-else class="w-3.5 h-3.5 text-indigo-400"  />
                 <span>{{ mode === 'auto' ? '跟随系统' : mode === 'light' ? '明亮' : '暗黑' }}</span>
               </button>
             </div>
@@ -139,7 +139,7 @@
           <div class="pt-16px border-t border-[--border-color] flex flex-col gap-10px">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-6px">
-                <IconInfo class="w-4 h-4 text-[--text-muted]" />
+                <SvgIcon name="info" class="w-4 h-4 text-[--text-muted]"  />
                 <span class="font-semibold text-[--text-secondary]">关于与反馈</span>
               </div>
               <span class="text-11px font-mono px-6px py-2px rounded bg-[--bg-subtle] text-[--text-secondary] font-semibold border border-[--border-subtle]">v1.0.0</span>
@@ -152,7 +152,7 @@
                 class="flex items-center justify-center gap-6px p-8px rounded-lg border border-[--border-subtle] bg-[--bg-subtle] hover:bg-[--bg-hover] text-[--text-primary] transition-colors no-underline"
               >
                 <span>GitHub 仓库</span>
-                <IconExternalLink class="w-3.5 h-3.5 text-[--text-muted]" />
+                <SvgIcon name="external-link" class="w-3.5 h-3.5 text-[--text-muted]"  />
               </a>
               <a
                 href="https://github.com/markcraft-dev/markcraft/issues"
@@ -160,7 +160,7 @@
                 class="flex items-center justify-center gap-6px p-8px rounded-lg border border-[--border-subtle] bg-[--bg-subtle] hover:bg-[--bg-hover] text-[--primary-color] font-medium transition-colors no-underline"
               >
                 <span>提交问题 / 反馈</span>
-                <IconExternalLink class="w-3.5 h-3.5" />
+                <SvgIcon name="external-link" class="w-3.5 h-3.5"  />
               </a>
             </div>
           </div>
@@ -173,7 +173,7 @@
             title="恢复所有设置到默认值"
             @click="resetToDefault"
           >
-            <IconRotateCcw class="w-3.5 h-3.5" />
+            <SvgIcon name="rotate-ccw" class="w-3.5 h-3.5"  />
             <span>恢复默认</span>
           </button>
 
@@ -183,7 +183,7 @@
               @click="openFullOptions"
             >
               <span>完整选项页</span>
-              <IconExternalLink class="w-3.5 h-3.5" />
+              <SvgIcon name="external-link" class="w-3.5 h-3.5"  />
             </button>
             <button
               class="px-16px py-6px rounded-lg bg-[--primary-color] hover:bg-[--primary-hover] text-white font-medium text-12px transition-colors cursor-pointer border-0 outline-none shadow-sm"
@@ -199,18 +199,11 @@
 </template>
 
 <script setup lang="ts">
+import SvgIcon from '@/components/SvgIcon.vue'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useStorage } from '@/shared/storage'
 import { DEFAULT_SETTINGS } from '@/shared/constants'
 import { applyTheme, applyCustomStyles } from '../core/theme'
-import IconSettings from '@/components/icons/IconSettings.vue'
-import IconClose from '@/components/icons/IconClose.vue'
-import IconSun from '@/components/icons/IconSun.vue'
-import IconMoon from '@/components/icons/IconMoon.vue'
-import IconDeviceAuto from '@/components/icons/IconDeviceAuto.vue'
-import IconExternalLink from '@/components/icons/IconExternalLink.vue'
-import IconRotateCcw from '@/components/icons/IconRotateCcw.vue'
-import IconInfo from '@/components/icons/IconInfo.vue'
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'theme-changed', theme: 'auto' | 'light' | 'dark'): void }>()

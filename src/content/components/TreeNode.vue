@@ -15,16 +15,16 @@
         :class="{ 'rotate-90': item.expanded }"
         @click.stop="handleToggle"
       >
-        <IconChevronRight class="w-3.5 h-3.5" />
+        <SvgIcon name="chevron-right" class="w-3.5 h-3.5"  />
       </span>
       <span v-else class="w-4 mr-4px flex-shrink-0"></span>
 
       <!-- Folder vs File Icon -->
       <span class="node-icon mr-6px flex items-center justify-center w-4 h-4 flex-shrink-0" :class="iconColorClass">
-        <IconFolderOpen v-if="item.isFolder && item.expanded" class="w-4 h-4" />
-        <IconFolder v-else-if="item.isFolder" class="w-4 h-4" />
-        <IconFileMarkdown v-else-if="isMarkdownFile" class="w-4 h-4" />
-        <IconFile v-else class="w-4 h-4" />
+        <SvgIcon name="folder-open" v-if="item.isFolder && item.expanded" class="w-4 h-4"  />
+        <SvgIcon name="folder" v-else-if="item.isFolder" class="w-4 h-4"  />
+        <SvgIcon name="file-markdown" v-else-if="isMarkdownFile" class="w-4 h-4"  />
+        <SvgIcon name="file" v-else class="w-4 h-4"  />
       </span>
 
       <!-- File / Folder Name -->
@@ -43,7 +43,7 @@
         title="在新标签页中打开"
         @click.stop="handleOpenExternal"
       >
-        <IconExternalLink class="w-3.5 h-3.5" />
+        <SvgIcon name="external-link" class="w-3.5 h-3.5"  />
       </span>
     </div>
 
@@ -63,13 +63,8 @@
 </template>
 
 <script setup lang="ts">
+import SvgIcon from '@/components/SvgIcon.vue'
 import { computed } from 'vue'
-import IconChevronRight from '@/components/icons/IconChevronRight.vue'
-import IconFolder from '@/components/icons/IconFolder.vue'
-import IconFolderOpen from '@/components/icons/IconFolderOpen.vue'
-import IconFileMarkdown from '@/components/icons/IconFileMarkdown.vue'
-import IconFile from '@/components/icons/IconFile.vue'
-import IconExternalLink from '@/components/icons/IconExternalLink.vue'
 import type { TreeNodeItem } from '@/shared/types'
 
 const props = withDefaults(

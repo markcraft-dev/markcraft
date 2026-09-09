@@ -11,7 +11,7 @@
       >
         <!-- Top Prominent Search Input Row -->
         <div class="flex items-center px-18px py-14px border-b border-[--border-color] bg-[--bg-page] gap-12px">
-          <IconSearch class="w-5 h-5 text-[--text-muted] flex-shrink-0" />
+          <SvgIcon name="search" class="w-5 h-5 text-[--text-muted] flex-shrink-0"  />
           <input
             ref="inputRef"
             v-model="query"
@@ -53,8 +53,8 @@
               <!-- File Name & Path Info -->
               <div class="flex items-center gap-10px min-w-0 flex-1 mr-14px">
                 <span class="p-4px rounded-lg bg-[--bg-subtle] flex-shrink-0">
-                  <IconFileMarkdown v-if="!item.isHeading" class="w-4 h-4 text-blue-500" />
-                  <IconOutline v-else class="w-4 h-4 text-[--primary-color]" />
+                  <SvgIcon name="file-markdown" v-if="!item.isHeading" class="w-4 h-4 text-blue-500"  />
+                  <SvgIcon name="outline" v-else class="w-4 h-4 text-[--primary-color]"  />
                 </span>
 
                 <div class="flex flex-col min-w-0">
@@ -81,7 +81,7 @@
 
           <!-- Empty State -->
           <div v-else-if="query" class="flex flex-col items-center justify-center p-36px text-center text-13px text-[--text-muted]">
-            <IconSearch class="w-8 h-8 mb-8px opacity-20 text-[--text-muted]" />
+            <SvgIcon name="search" class="w-8 h-8 mb-8px opacity-20 text-[--text-muted]"  />
             <span>未找到与 “{{ query }}” 相关的 Markdown 文件或章节</span>
           </div>
 
@@ -103,7 +103,7 @@
             >
               <div class="flex items-center gap-10px">
                 <span class="p-4px rounded-lg bg-[--bg-subtle] flex-shrink-0 text-[--text-muted] group-hover:text-[--text-primary] transition-colors">
-                  <component :is="action.icon" class="w-4 h-4" />
+                  <SvgIcon :name="action.icon" class="w-4 h-4" />
                 </span>
                 <span class="font-medium">{{ action.title }}</span>
               </div>
@@ -129,17 +129,8 @@
 </template>
 
 <script setup lang="ts">
+import SvgIcon from '@/components/SvgIcon.vue'
 import { ref, computed, watch, nextTick } from 'vue'
-import IconSearch from '@/components/icons/IconSearch.vue'
-import IconFileMarkdown from '@/components/icons/IconFileMarkdown.vue'
-import IconOutline from '@/components/icons/IconOutline.vue'
-import IconSettings from '@/components/icons/IconSettings.vue'
-import IconSun from '@/components/icons/IconSun.vue'
-import IconMaximize from '@/components/icons/IconMaximize.vue'
-import IconPrinter from '@/components/icons/IconPrinter.vue'
-import IconFileCode from '@/components/icons/IconFileCode.vue'
-import IconCopy from '@/components/icons/IconCopy.vue'
-import IconDownload from '@/components/icons/IconDownload.vue'
 import type { TreeNodeItem, OutlineItem } from '@/shared/types'
 
 export interface PaletteItem {
@@ -168,14 +159,14 @@ const selectedIndex = ref(0)
 const inputRef = ref<HTMLInputElement | null>(null)
 
 const actions = [
-  { id: 'copy-rich', title: '一键复制富文本 (微信/知乎排版)', shortcut: '⌥C', icon: IconCopy },
-  { id: 'export-html', title: '导出为单文件 HTML (离线排版)', shortcut: '⌥H', icon: IconDownload },
-  { id: 'export-md', title: '下载 Markdown 文本文件', shortcut: '⌥S', icon: IconDownload },
-  { id: 'settings', title: '打开偏好设置', shortcut: '⌘,', icon: IconSettings },
-  { id: 'theme', title: '切换界面明暗主题', shortcut: '⌘T', icon: IconSun },
-  { id: 'raw', title: '切换 Markdown 原始源码 / 在线编辑', shortcut: '⌘E', icon: IconFileCode },
-  { id: 'fullscreen', title: '全屏沉浸阅读', shortcut: '⌘F', icon: IconMaximize },
-  { id: 'print', title: '打印 / 导出 PDF', shortcut: '⌘P', icon: IconPrinter }
+  { id: 'copy-rich', title: '一键复制富文本 (微信/知乎排版)', shortcut: '⌥C', icon: 'copy' },
+  { id: 'export-html', title: '导出为单文件 HTML (离线排版)', shortcut: '⌥H', icon: 'download' },
+  { id: 'export-md', title: '下载 Markdown 文本文件', shortcut: '⌥S', icon: 'download' },
+  { id: 'settings', title: '打开偏好设置', shortcut: '⌘,', icon: 'settings' },
+  { id: 'theme', title: '切换界面明暗主题', shortcut: '⌘T', icon: 'sun' },
+  { id: 'raw', title: '切换 Markdown 原始源码 / 在线编辑', shortcut: '⌘E', icon: 'file-code' },
+  { id: 'fullscreen', title: '全屏沉浸阅读', shortcut: '⌘F', icon: 'maximize' },
+  { id: 'print', title: '打印 / 导出 PDF', shortcut: '⌘P', icon: 'printer' }
 ]
 
 function flattenTree(nodes: TreeNodeItem[]): PaletteItem[] {

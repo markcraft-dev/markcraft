@@ -10,7 +10,7 @@
         class="flex items-center gap-4px text-12px text-[--primary-color] hover:text-[--primary-hover] transition-colors cursor-pointer border-0 outline-none bg-transparent"
         @click="openOptions"
       >
-        <IconSettings class="w-3.5 h-3.5" />
+        <SvgIcon name="settings" class="w-3.5 h-3.5"  />
         <span>设置</span>
       </button>
     </div>
@@ -26,9 +26,9 @@
           :class="settings.pageTheme === mode ? 'bg-[--bg-page] text-[--primary-color] font-medium shadow-sm' : 'bg-transparent text-[--text-secondary] hover:text-[--text-primary]'"
           @click="setTheme(mode)"
         >
-          <IconDeviceAuto v-if="mode === 'auto'" class="w-3.5 h-3.5" />
-          <IconSun v-else-if="mode === 'light'" class="w-3.5 h-3.5 text-amber-500" />
-          <IconMoon v-else class="w-3.5 h-3.5 text-indigo-400" />
+          <SvgIcon name="device-auto" v-if="mode === 'auto'" class="w-3.5 h-3.5"  />
+          <SvgIcon name="sun" v-else-if="mode === 'light'" class="w-3.5 h-3.5 text-amber-500"  />
+          <SvgIcon name="moon" v-else class="w-3.5 h-3.5 text-indigo-400"  />
           <span>{{ mode === 'auto' ? '自动' : mode === 'light' ? '明亮' : '暗黑' }}</span>
         </button>
       </div>
@@ -68,12 +68,9 @@
 </template>
 
 <script setup lang="ts">
+import SvgIcon from '@/components/SvgIcon.vue'
 import { onMounted } from 'vue'
 import { useStorage } from '@/shared/storage'
-import IconSettings from '@/components/icons/IconSettings.vue'
-import IconSun from '@/components/icons/IconSun.vue'
-import IconMoon from '@/components/icons/IconMoon.vue'
-import IconDeviceAuto from '@/components/icons/IconDeviceAuto.vue'
 
 const { settings, loadSettings, saveSettings } = useStorage()
 
