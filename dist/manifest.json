@@ -1,0 +1,81 @@
+{
+   "manifest_version": 3,
+   "name": "MarkCraft",
+   "description": "__MSG_ext_desc__",
+   "version": "1.0.0",
+   "version_name": "1.0.0",
+   "default_locale": "en",
+   "author": "MarkCraft Team",
+   "homepage_url": "https://github.com/markcraft-dev/markcraft",
+   "action": {
+      "default_icon": {
+         "16": "assets/logo.png",
+         "24": "assets/logo.png",
+         "32": "assets/logo.png"
+      },
+      "default_popup": "popup/index.html",
+      "default_title": "MarkCraft"
+   },
+   "background": {
+      "service_worker": "background/index.mjs",
+      "type": "module"
+   },
+   "commands": {
+      "toggleCentered": {
+         "description": "__MSG_command_toggle_centered__",
+         "suggested_key": {
+            "default": "Alt+Shift+C"
+         }
+      },
+      "togglePageTheme": {
+         "description": "__MSG_command_toggle_theme__",
+         "suggested_key": {
+            "default": "Alt+Shift+T"
+         }
+      },
+      "toggleRefresh": {
+         "description": "__MSG_command_toggle_refresh__",
+         "suggested_key": {
+            "default": "Alt+Shift+R"
+         }
+      },
+      "toggleSide": {
+         "description": "__MSG_command_toggle_side__",
+         "suggested_key": {
+            "default": "Alt+Shift+B"
+         }
+      }
+   },
+   "content_scripts": [
+      {
+         "css": [ "content/style.css" ],
+         "js": [ "content/index.global.js" ],
+         "matches": [
+            "*://*/*.md", "*://*/*.mdx", "*://*/*.mdc", "*://*/*.mkd", "*://*/*.markdown",
+            "*://*/*.MD", "*://*/*.MDX", "*://*/*.MDC", "*://*/*.MKD", "*://*/*.MARKDOWN",
+            "*://*/*.md?*", "*://*/*.mdx?*", "*://*/*.mdc?*", "*://*/*.mkd?*", "*://*/*.markdown?*",
+            "*://*/*.MD?*", "*://*/*.MDX?*", "*://*/*.MDC?*", "*://*/*.MKD?*", "*://*/*.MARKDOWN?*",
+            "file:///*"
+         ],
+         "run_at": "document_start"
+      }
+   ],
+   "icons": {
+      "16": "assets/logo.png",
+      "32": "assets/logo.png",
+      "48": "assets/logo.png",
+      "128": "assets/logo.png",
+      "512": "assets/logo.png"
+   },
+   "options_ui": {
+      "open_in_tab": true,
+      "page": "options/index.html"
+   },
+   "permissions": [ "storage", "tabs" ],
+   "web_accessible_resources": [
+      {
+         "matches": [ "<all_urls>" ],
+         "resources": [ "assets/*" ]
+      }
+   ]
+}
