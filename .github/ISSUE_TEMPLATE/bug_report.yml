@@ -1,0 +1,42 @@
+name: Bug report
+description: Report a reproducible problem in MarkCraft
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing issues before opening a new report.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem and the expected behavior.
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 140 on macOS 15
+    validations:
+      required: true
+  - type: input
+    id: extension
+    attributes:
+      label: MarkCraft version
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: List the smallest set of steps that reproduces the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console errors or screenshots
+      description: Remove private document contents and other sensitive information.

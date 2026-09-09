@@ -1,0 +1,21 @@
+node_modules/
+dist/resources/
+public/resources/
+.DS_Store
+*.log
+.env
+.env.*
+.vscode/
+.idea/
+
+# Trellis and local agent runtime state
+.agents/
+.codex/
+.trellis/
+.trellis/.developer
+.trellis/.runtime/
+.trellis/**/__pycache__/
+
+# External reference material is not part of the public source tree
+reference/
+AGENTS.md
