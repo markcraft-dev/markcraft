@@ -10,7 +10,7 @@
         :active="leftOpen"
         @click="$emit('toggle-left-side')"
       >
-        <IconSidebarLeft class="w-4 h-4" />
+        <SvgIcon name="sidebar-left" class="w-4 h-4"  />
       </IconButton>
 
       <!-- History Back Button -->
@@ -19,7 +19,7 @@
         shortcut="⌘["
         @click="goBack"
       >
-        <IconArrowLeft class="w-4 h-4" />
+        <SvgIcon name="arrow-left" class="w-4 h-4"  />
       </IconButton>
 
       <!-- History Forward Button -->
@@ -28,7 +28,7 @@
         shortcut="⌘]"
         @click="goForward"
       >
-        <IconArrowRight class="w-4 h-4" />
+        <SvgIcon name="arrow-right" class="w-4 h-4"  />
       </IconButton>
     </div>
 
@@ -43,7 +43,7 @@
         shortcut="⌘K"
         @click="$emit('open-search')"
       >
-        <IconSearch class="w-4 h-4" />
+        <SvgIcon name="search" class="w-4 h-4"  />
       </IconButton>
 
       <!-- Toggle Edit / Preview Mode (WYSIWYG Online Editor) -->
@@ -53,8 +53,8 @@
         :active="isEditMode"
         @click="$emit('toggle-edit')"
       >
-        <IconEye v-if="isEditMode" class="w-4 h-4" />
-        <IconEdit v-else class="w-4 h-4" />
+        <SvgIcon name="eye" v-if="isEditMode" class="w-4 h-4"  />
+        <SvgIcon name="edit" v-else class="w-4 h-4"  />
       </IconButton>
 
       <!-- Toggle Fullscreen -->
@@ -63,8 +63,8 @@
         shortcut="⌘F"
         @click="toggleFullscreen"
       >
-        <IconMinimize v-if="isFullscreen" class="w-4 h-4" />
-        <IconMaximize v-else class="w-4 h-4" />
+        <SvgIcon name="minimize" v-if="isFullscreen" class="w-4 h-4"  />
+        <SvgIcon name="maximize" v-else class="w-4 h-4"  />
       </IconButton>
 
       <!-- Print Document -->
@@ -73,7 +73,7 @@
         shortcut="⌘P"
         @click="printDocument"
       >
-        <IconPrinter class="w-4 h-4" />
+        <SvgIcon name="printer" class="w-4 h-4"  />
       </IconButton>
 
       <!-- Theme Switcher -->
@@ -82,9 +82,9 @@
         shortcut="⌘T"
         @click="$emit('toggle-theme')"
       >
-        <IconSun v-if="theme === 'light'" class="w-4 h-4 text-amber-500" />
-        <IconMoon v-else-if="theme === 'dark'" class="w-4 h-4 text-indigo-400" />
-        <IconDeviceAuto v-else class="w-4 h-4" />
+        <SvgIcon name="sun" v-if="theme === 'light'" class="w-4 h-4 text-amber-500"  />
+        <SvgIcon name="moon" v-else-if="theme === 'dark'" class="w-4 h-4 text-indigo-400"  />
+        <SvgIcon name="device-auto" v-else class="w-4 h-4"  />
       </IconButton>
 
       <!-- Preferences Settings (Classic Gear) -->
@@ -93,7 +93,7 @@
         shortcut="⌘,"
         @click="$emit('open-settings')"
       >
-        <IconSettings class="w-4 h-4" />
+        <SvgIcon name="settings" class="w-4 h-4"  />
       </IconButton>
 
       <div class="w-1px h-14px bg-[--border-color] mx-2px"></div>
@@ -105,29 +105,16 @@
         :active="rightOpen"
         @click="$emit('toggle-right-side')"
       >
-        <IconSlidersHorizontal class="w-4 h-4" />
+        <SvgIcon name="sliders-horizontal" class="w-4 h-4"  />
       </IconButton>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
+import SvgIcon from '@/components/SvgIcon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import IconButton from '@/components/IconButton.vue'
-import IconSidebarLeft from '@/components/icons/IconSidebarLeft.vue'
-import IconArrowLeft from '@/components/icons/IconArrowLeft.vue'
-import IconArrowRight from '@/components/icons/IconArrowRight.vue'
-import IconSearch from '@/components/icons/IconSearch.vue'
-import IconEdit from '@/components/icons/IconEdit.vue'
-import IconEye from '@/components/icons/IconEye.vue'
-import IconMaximize from '@/components/icons/IconMaximize.vue'
-import IconMinimize from '@/components/icons/IconMinimize.vue'
-import IconPrinter from '@/components/icons/IconPrinter.vue'
-import IconSun from '@/components/icons/IconSun.vue'
-import IconMoon from '@/components/icons/IconMoon.vue'
-import IconDeviceAuto from '@/components/icons/IconDeviceAuto.vue'
-import IconSettings from '@/components/icons/IconSettings.vue'
-import IconSlidersHorizontal from '@/components/icons/IconSlidersHorizontal.vue'
 
 const props = defineProps<{
   theme: 'auto' | 'light' | 'dark'

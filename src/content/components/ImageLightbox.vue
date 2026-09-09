@@ -13,7 +13,7 @@
           title="下载原图"
           @click="downloadImage"
         >
-          <IconDownload class="w-4 h-4" />
+          <SvgIcon name="download" class="w-4 h-4"  />
           <span>下载图片</span>
         </button>
 
@@ -23,7 +23,7 @@
           title="关闭 (Esc)"
           @click="$emit('close')"
         >
-          <IconClose class="w-4 h-4" />
+          <SvgIcon name="close" class="w-4 h-4"  />
         </button>
       </div>
 
@@ -50,9 +50,8 @@
 </template>
 
 <script setup lang="ts">
+import SvgIcon from '@/components/SvgIcon.vue'
 import { ref, onMounted, onUnmounted } from 'vue'
-import IconDownload from '@/components/icons/IconDownload.vue'
-import IconClose from '@/components/icons/IconClose.vue'
 
 const props = defineProps<{
   visible: boolean

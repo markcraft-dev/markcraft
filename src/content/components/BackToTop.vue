@@ -34,14 +34,14 @@
       </svg>
 
       <!-- Center Arrow Icon -->
-      <IconArrowUp class="w-5 h-5 text-[--text-secondary] group-hover:text-[--primary-color] transition-colors relative z-10" />
+      <SvgIcon name="arrow-up" class="w-5 h-5 text-[--text-secondary] group-hover:text-[--primary-color] transition-colors relative z-10"  />
     </button>
   </transition>
 </template>
 
 <script setup lang="ts">
+import SvgIcon from '@/components/SvgIcon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import IconArrowUp from '@/components/icons/IconArrowUp.vue'
 
 const visible = ref(false)
 const progress = ref(0)

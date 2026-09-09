@@ -18,7 +18,7 @@
         shortcut="⌘K"
         @click="$emit('open-search')"
       >
-        <IconSearch class="w-3.5 h-3.5" />
+        <SvgIcon name="search" class="w-3.5 h-3.5"  />
       </IconButton>
     </div>
 
@@ -36,13 +36,13 @@
         title="返回上一级目录"
         @click="navigateParentDir"
       >
-        <IconCornerLeftUp class="w-3.5 h-3.5 flex-shrink-0 text-[--text-muted] group-hover:text-[--text-primary] transition-colors" />
+        <SvgIcon name="corner-left-up" class="w-3.5 h-3.5 flex-shrink-0 text-[--text-muted] group-hover:text-[--text-primary] transition-colors"  />
         <span class="truncate font-medium">.. 返回上一级</span>
       </div>
 
       <!-- Empty Folder State -->
       <div v-if="folderTree.length === 0" class="flex flex-col items-center justify-center p-32px text-center text-12px text-[--text-muted]">
-        <IconFolder class="w-8 h-8 mb-8px opacity-25 text-[--text-muted]" />
+        <SvgIcon name="folder" class="w-8 h-8 mb-8px opacity-25 text-[--text-muted]"  />
         <span>当前目录下未找到 Markdown 文件</span>
       </div>
 
@@ -64,7 +64,7 @@
         title="偏好设置 (⌘,)"
         @click="$emit('open-settings')"
       >
-        <IconSettings class="w-3.5 h-3.5 text-[--text-muted]" />
+        <SvgIcon name="settings" class="w-3.5 h-3.5 text-[--text-muted]"  />
         <span>设置</span>
       </button>
 
@@ -81,14 +81,11 @@
 </template>
 
 <script setup lang="ts">
+import SvgIcon from '@/components/SvgIcon.vue'
 import { ref, computed, onMounted } from 'vue'
 import TreeNode from './TreeNode.vue'
 import IconButton from '@/components/IconButton.vue'
 import IconLogo from '@/components/icons/IconLogo.vue'
-import IconFolder from '@/components/icons/IconFolder.vue'
-import IconSearch from '@/components/icons/IconSearch.vue'
-import IconSettings from '@/components/icons/IconSettings.vue'
-import IconCornerLeftUp from '@/components/icons/IconCornerLeftUp.vue'
 import { fetchDirectory, getParentFolderURL, getAncestorFolderURLs } from '../core/folder'
 import type { TreeNodeItem } from '@/shared/types'
 

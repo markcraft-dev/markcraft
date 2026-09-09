@@ -15,24 +15,56 @@ const iconSources = import.meta.glob('../assets/icon_assets/*.svg', {
   import: 'default'
 }) as Record<string, string>
 
-const iconAliases: Record<string, string> = {
-  'columns2': 'IconColumns.svg',
+const iconRegistry: Record<string, string> = {
+  'arrow-left': 'IconArrowLeft.svg',
+  'arrow-right': 'IconArrowRight.svg',
+  'arrow-up': 'IconArrowUp.svg',
+  bold: 'IconBold.svg',
+  check: 'IconCheck.svg',
+  'chevron-right': 'IconChevronRight.svg',
+  clock: 'IconClock.svg',
+  close: 'IconClose.svg',
+  columns: 'IconColumns.svg',
+  copy: 'IconCopy.svg',
+  'corner-left-up': 'IconCornerLeftUp.svg',
   'device-auto': 'IconDeviceAuto.svg',
-  'file-text': 'IconFileMarkdown.svg',
-  'list-tree': 'IconOutline.svg',
-  'monitor-smartphone': 'IconDeviceAuto.svg',
-  'panel-left': 'IconSidebarLeft.svg',
-  'panel-right': 'IconSidebarRight.svg',
-  'square-pen': 'IconEdit.svg',
-  x: 'IconClose.svg',
+  download: 'IconDownload.svg',
+  edit: 'IconEdit.svg',
+  'external-link': 'IconExternalLink.svg',
+  eye: 'IconEye.svg',
+  file: 'IconFile.svg',
+  'file-code': 'IconFileCode.svg',
+  'file-markdown': 'IconFileMarkdown.svg',
+  folder: 'IconFolder.svg',
+  'folder-open': 'IconFolderOpen.svg',
+  hash: 'IconHash.svg',
+  heading: 'IconHeading.svg',
+  image: 'IconImage.svg',
+  info: 'IconInfo.svg',
+  italic: 'IconItalic.svg',
+  link: 'IconLink.svg',
+  list: 'IconList.svg',
+  maximize: 'IconMaximize.svg',
+  minimize: 'IconMinimize.svg',
+  moon: 'IconMoon.svg',
+  outline: 'IconOutline.svg',
+  printer: 'IconPrinter.svg',
+  quote: 'IconQuote.svg',
+  'rotate-ccw': 'IconRotateCcw.svg',
+  save: 'IconSave.svg',
+  search: 'IconSearch.svg',
+  settings: 'IconSettings.svg',
+  sidebar: 'IconSidebar.svg',
+  'sidebar-left': 'IconSidebarLeft.svg',
+  'sidebar-right': 'IconSidebarRight.svg',
+  'sliders-horizontal': 'IconSlidersHorizontal.svg',
+  sun: 'IconSun.svg',
+  table: 'IconTable.svg',
 }
 
 const svg = computed(() => {
-  const filename = iconAliases[props.name] ?? `Icon${props.name
-    .split('-')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('')}.svg`
-  return iconSources[`../assets/icon_assets/${filename}`] ?? ''
+  const filename = iconRegistry[props.name]
+  return filename ? iconSources[`../assets/icon_assets/${filename}`] ?? '' : ''
 })
 </script>
 

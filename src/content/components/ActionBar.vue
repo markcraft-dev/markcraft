@@ -10,7 +10,7 @@
       :title="leftOpen ? '收起左侧文件列表 (Cmd+B)' : '展开左侧文件列表 (Cmd+B)'"
       @click="$emit('toggle-left-side')"
     >
-      <IconSidebarLeft class="w-4 h-4" />
+      <SvgIcon name="sidebar-left" class="w-4 h-4"  />
     </button>
 
     <!-- Toggle Right Outline Sidebar -->
@@ -20,7 +20,7 @@
       :title="rightOpen ? '收起右侧文章大纲' : '展开右侧文章大纲'"
       @click="$emit('toggle-right-side')"
     >
-      <IconSidebarRight class="w-4 h-4" />
+      <SvgIcon name="sidebar-right" class="w-4 h-4"  />
     </button>
 
     <div class="w-1px h-14px bg-[--border-color] mx-2px"></div>
@@ -32,7 +32,7 @@
       :title="isRawMode ? '返回富文本渲染视图' : '查看 Markdown 原始源码'"
       @click="$emit('toggle-raw')"
     >
-      <IconFileCode class="w-4 h-4" />
+      <SvgIcon name="file-code" class="w-4 h-4"  />
     </button>
 
     <!-- Toggle Fullscreen -->
@@ -41,8 +41,8 @@
       :title="isFullscreen ? '退出全屏' : '全屏沉浸阅读'"
       @click="toggleFullscreen"
     >
-      <IconMinimize v-if="isFullscreen" class="w-4 h-4" />
-      <IconMaximize v-else class="w-4 h-4" />
+      <SvgIcon name="minimize" v-if="isFullscreen" class="w-4 h-4"  />
+      <SvgIcon name="maximize" v-else class="w-4 h-4"  />
     </button>
 
     <!-- Print Document -->
@@ -51,7 +51,7 @@
       title="打印 / 导出 PDF (Cmd+P)"
       @click="printDocument"
     >
-      <IconPrinter class="w-4 h-4" />
+      <SvgIcon name="printer" class="w-4 h-4"  />
     </button>
 
     <div class="w-1px h-14px bg-[--border-color] mx-2px"></div>
@@ -62,9 +62,9 @@
       :title="themeTitle"
       @click="$emit('toggle-theme')"
     >
-      <IconSun v-if="theme === 'light'" class="w-4 h-4 text-amber-500" />
-      <IconMoon v-else-if="theme === 'dark'" class="w-4 h-4 text-indigo-400" />
-      <IconDeviceAuto v-else class="w-4 h-4" />
+      <SvgIcon name="sun" v-if="theme === 'light'" class="w-4 h-4 text-amber-500"  />
+      <SvgIcon name="moon" v-else-if="theme === 'dark'" class="w-4 h-4 text-indigo-400"  />
+      <SvgIcon name="device-auto" v-else class="w-4 h-4"  />
     </button>
 
     <!-- Open Settings -->
@@ -73,23 +73,14 @@
       title="偏好设置"
       @click="$emit('open-settings')"
     >
-      <IconSettings class="w-4 h-4" />
+      <SvgIcon name="settings" class="w-4 h-4"  />
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
+import SvgIcon from '@/components/SvgIcon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import IconSidebarLeft from '@/components/icons/IconSidebarLeft.vue'
-import IconSidebarRight from '@/components/icons/IconSidebarRight.vue'
-import IconFileCode from '@/components/icons/IconFileCode.vue'
-import IconMaximize from '@/components/icons/IconMaximize.vue'
-import IconMinimize from '@/components/icons/IconMinimize.vue'
-import IconPrinter from '@/components/icons/IconPrinter.vue'
-import IconSun from '@/components/icons/IconSun.vue'
-import IconMoon from '@/components/icons/IconMoon.vue'
-import IconDeviceAuto from '@/components/icons/IconDeviceAuto.vue'
-import IconSettings from '@/components/icons/IconSettings.vue'
 
 const props = withDefaults(
   defineProps<{
