@@ -19,3 +19,7 @@ public/resources/
 # External reference material is not part of the public source tree
 reference/
 AGENTS.md
+
+# Generated Rust/WASM package and Rust build cache
+src/content/wasm/
+wasm/**/target/

@@ -4,6 +4,8 @@ import UnoCSS from 'unocss/vite'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs'
+import wasm from 'vite-plugin-wasm'
+import topLevelAwait from 'vite-plugin-top-level-await'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const rootDir = resolve(__dirname, '..')
@@ -54,7 +56,7 @@ async function runBuild() {
     await build({
       root: rootDir,
       logLevel: 'warn',
-      plugins: [vue(), UnoCSS()],
+      plugins: [vue(), UnoCSS(), wasm(), topLevelAwait()],
       resolve: {
         alias: { '@': resolve(rootDir, 'src') }
       },
@@ -98,7 +100,7 @@ async function runBuild() {
       root: rootDir,
       logLevel: 'warn',
       publicDir: false,
-      plugins: [vue(), UnoCSS()],
+      plugins: [vue(), UnoCSS(), wasm(), topLevelAwait()],
       resolve: {
         alias: { '@': resolve(rootDir, 'src') }
       },
@@ -148,6 +150,9 @@ async function runBuild() {
     )
     await copyDir(resolve(rootDir, 'public/assets'), resolve(outDir, 'assets'))
     await copyDir(resolve(rootDir, 'public/_locales'), resolve(outDir, '_locales'))
+    if (fs.existsSync(resolve(rootDir, 'src/content/wasm'))) {
+      await copyDir(resolve(rootDir, 'src/content/wasm'), resolve(outDir, 'content/wasm'))
+    }
 
     // 5. Post-process UTF-8 encoding (convert non-ASCII code points in content script to standard \uXXXX escapes)
     const contentScriptPath = resolve(outDir, 'content/index.global.js')
