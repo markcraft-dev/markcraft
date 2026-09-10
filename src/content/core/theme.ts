@@ -44,9 +44,11 @@ export function applyCustomStyles(
     document.documentElement.style.setProperty('--mdr-font-size', '16px')
   }
 
-  // 3. Content Max Width
+  // 3. Content Max Width（关闭时移除内联变量，立即回落到默认宽度）
   if (contentWidth) {
     document.documentElement.style.setProperty('--content-max-width', `${contentWidth}px`)
+  } else {
+    document.documentElement.style.removeProperty('--content-max-width')
   }
 
   // 4. Custom CSS
