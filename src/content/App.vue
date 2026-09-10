@@ -142,6 +142,7 @@ import { enhanceContentBlocks } from './core/enhancements'
 import { copyAsRichText, exportAsStandaloneHtml } from './core/export'
 import { domToMarkdown } from './core/dom-to-markdown'
 import { storeFileHandle, storeDirectoryHandle, trySilentSave, trySilentSaveViaDirectory, writeToFileHandle } from './core/file-handle-storage'
+import { tryNativeSave } from './core/native-save'
 import { useStorage } from '@/shared/storage'
 import type { OutlineItem, TreeNodeItem } from '@/shared/types'
 
@@ -275,7 +276,19 @@ async function saveInPlace(): Promise<boolean> {
     console.warn('Silent save check error:', e)
   }
 
-  // 2. 首次授权：让用户选择文档所在文件夹（readwrite）。
+  // 2. 本机写入宿主（Native Messaging）：已安装时直接覆盖原文件，零弹窗
+  try {
+    if (await tryNativeSave(fileUrl, newMarkdown)) {
+      rawMarkdownContent.value = newMarkdown
+      isDirty.value = false
+      showToast('✓ 已覆盖保存至原文件')
+      return true
+    }
+  } catch (e) {
+    console.warn('Native save error:', e)
+  }
+
+  // 3. 首次授权：让用户选择文档所在文件夹（readwrite）。
   //    目录句柄持久化后，该文件夹内所有文件均静默覆盖保存，不再弹任何对话框。
   if ('showDirectoryPicker' in window) {
     try {
@@ -303,7 +316,7 @@ async function saveInPlace(): Promise<boolean> {
     }
   }
 
-  // 3. 兜底：单文件另存对话框（文件名已预填）
+  // 4. 兜底：单文件另存对话框（文件名已预填）
   try {
     if ('showSaveFilePicker' in window) {
       const handle = await (window as any).showSaveFilePicker({

@@ -71,7 +71,7 @@
       "open_in_tab": true,
       "page": "options/index.html"
    },
-   "permissions": [ "storage", "tabs" ],
+   "permissions": [ "storage", "tabs", "nativeMessaging" ],
    "web_accessible_resources": [
       {
          "matches": [ "<all_urls>" ],

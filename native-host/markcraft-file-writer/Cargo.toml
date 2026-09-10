@@ -1,0 +1,13 @@
+[package]
+name = "markcraft-file-writer"
+version = "1.0.0"
+edition = "2021"
+
+# MarkCraft 的 Native Messaging 本机写入宿主：
+# 从 stdin 读取 {path, content}，直接覆盖写回原文件，零弹窗。
+[dependencies]
+serde_json = "1"
+
+[profile.release]
+opt-level = "z"
+strip = true
