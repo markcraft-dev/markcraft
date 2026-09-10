@@ -1,4 +1,4 @@
-export function applyTheme(theme: 'auto' | 'light' | 'dark') {
+export function applyTheme(theme: 'auto' | 'light' | 'dark' | 'sepia' | 'nordic') {
   let effectiveTheme = theme
   if (theme === 'auto') {
     const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches

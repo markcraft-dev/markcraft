@@ -20,11 +20,14 @@ npm install
 npm run build
 ```
 
-The production-ready extension is generated in `dist/`. Load that directory from `chrome://extensions` with Developer mode enabled.
+`npm run build` first compiles the Rust core-algorithm crate to WASM (`npm run build:wasm`, requires `wasm-pack`) and then bundles the extension into `dist/`. Load that directory from `chrome://extensions` with Developer mode enabled.
 
 ## Documentation
 
 - [中文文档](README_zh.md)
+- [WASM core architecture](docs/wasm_core.md) / [WASM 核心层架构](docs/wasm_core.zh-CN.md)
+- [Codebase analysis (中文)](docs/codebase_analysis.zh-CN.md)
+- [Performance notes](docs/performance_optimization.md)
 
 ## Privacy
 

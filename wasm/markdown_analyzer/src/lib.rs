@@ -1,118 +1,77 @@
-use serde::Serialize;
+//! MarkCraft 核心算法 WASM 模块。
+//!
+//! JavaScript 层负责 DOM 读取、网络与浏览器 API；所有纯算法集中在
+//! 本 crate：目录解析与过滤、标题 slug 与大纲、DOM 快照转 Markdown、
+//! 快捷搜索、文档统计。
+
+mod directory;
+mod dommd;
+mod outline;
+mod palette;
+mod slug;
+mod stats;
+
 use wasm_bindgen::prelude::*;
 
-#[derive(Serialize)]
-struct DirectoryItem {
-    name: String,
-    path: String,
-    is_folder: bool,
-    size: u64,
-    size_unit: String,
-    timestamp: i64,
-    date: String,
-}
+use crate::dommd::DomNode;
+use crate::outline::{HeadingInput, OutlineResult};
+use crate::palette::{PaletteFileNode, PaletteHeading, PaletteResult};
 
-fn read_quoted(source: &str, cursor: &mut usize) -> Option<String> {
-    let start = source[*cursor..].find('"')? + *cursor + 1;
-    let mut value = String::new();
-    let mut escaped = false;
-    for (offset, ch) in source[start..].char_indices() {
-        let position = start + offset;
-        if escaped {
-            value.push(match ch {
-                'n' => '\n',
-                'r' => '\r',
-                't' => '\t',
-                other => other,
-            });
-            escaped = false;
-        } else if ch == '\\' {
-            escaped = true;
-        } else if ch == '"' {
-            *cursor = position + 1;
-            return Some(value);
-        } else {
-            value.push(ch);
-        }
-    }
-    *cursor = source.len();
-    None
-}
-
-fn read_number(source: &str, cursor: &mut usize) -> Option<i64> {
-    while *cursor < source.len() {
-        let ch = source[*cursor..].chars().next()?;
-        if ch.is_ascii_digit() || ch == '-' {
-            break;
-        }
-        *cursor += ch.len_utf8();
-    }
-    let start = *cursor;
-    while *cursor < source.len() {
-        let ch = source[*cursor..].chars().next()?;
-        if !ch.is_ascii_digit() && ch != '-' {
-            break;
-        }
-        *cursor += ch.len_utf8();
-    }
-    source.get(start..*cursor)?.parse().ok()
+fn to_value<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
+    serde_wasm_bindgen::to_value(value).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// 解析目录页面的 addRow 调用，保持网络与 DOM 逻辑在 JavaScript 层。
 #[wasm_bindgen]
-pub fn parse_directory(source: &str) -> JsValue {
-    let mut cursor = 0;
-    let mut items = Vec::new();
-    while let Some(offset) = source[cursor..].find("addRow(") {
-        cursor += offset + 7;
-        let name = match read_quoted(source, &mut cursor) {
-            Some(v) => v,
-            None => break,
-        };
-        let path = match read_quoted(source, &mut cursor) {
-            Some(v) => v,
-            None => break,
-        };
-        let is_folder = read_number(source, &mut cursor).unwrap_or(0) != 0;
-        let size = read_number(source, &mut cursor).unwrap_or(0).max(0) as u64;
-        let size_unit = match read_quoted(source, &mut cursor) {
-            Some(v) => v,
-            None => break,
-        };
-        let timestamp = read_number(source, &mut cursor).unwrap_or(0);
-        let date = match read_quoted(source, &mut cursor) {
-            Some(v) => v,
-            None => break,
-        };
-        items.push(DirectoryItem {
-            name,
-            path,
-            is_folder,
-            size,
-            size_unit,
-            timestamp,
-            date,
-        });
-    }
-    serde_wasm_bindgen::to_value(&items).unwrap_or(JsValue::NULL)
+pub fn parse_directory(source: &str) -> Result<JsValue, JsValue> {
+    to_value(&directory::parse_directory(source))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{read_number, read_quoted};
+/// 过滤隐藏文件与非 Markdown 条目，保持原有顺序。
+#[wasm_bindgen]
+pub fn filter_directory(source: &str) -> Result<JsValue, JsValue> {
+    to_value(&directory::filter_directory(source))
+}
 
-    #[test]
-    fn reads_utf8_and_escaped_values() {
-        let mut cursor = 0;
-        assert_eq!(
-            read_quoted(r#"  "中文 \"文"  "#, &mut cursor),
-            Some("中文 \"文".to_string())
-        );
-    }
+/// 单页扫描：页面内是否含 Markdown 文件，以及待递归的子目录 URL。
+#[wasm_bindgen]
+pub fn scan_directory(source: &str, base_url: &str) -> Result<JsValue, JsValue> {
+    to_value(&directory::scan_directory(source, base_url))
+}
 
-    #[test]
-    fn reads_numbers_after_separators() {
-        let mut cursor = 0;
-        assert_eq!(read_number(" , -42,", &mut cursor), Some(-42));
-    }
+/// 推导目标文件自根向下的全部祖先目录 URL。
+#[wasm_bindgen]
+pub fn ancestor_folder_urls(root_url: &str, target_file_url: &str) -> Result<JsValue, JsValue> {
+    to_value(&directory::ancestor_folder_urls(root_url, target_file_url))
+}
+
+/// 构建文章大纲：`headings` 为 `[{text, level}]`，返回 `{tree, list}`。
+/// 注意：wasm-bindgen 将 i64 映射为 BigInt，导出参数需用 i32 以便 JS 直接传 number。
+#[wasm_bindgen]
+pub fn build_outline(headings: JsValue, max_level: i32) -> Result<JsValue, JsValue> {
+    let parsed: Vec<HeadingInput> = serde_wasm_bindgen::from_value(headings)?;
+    let result: OutlineResult = outline::build_outline(&parsed, max_level as i64);
+    to_value(&result)
+}
+
+/// 快捷搜索：扁平化文件树、合并标题条目并按查询过滤。
+#[wasm_bindgen]
+pub fn search_palette(files: JsValue, headings: JsValue, query: &str) -> Result<JsValue, JsValue> {
+    let parsed_files: Vec<PaletteFileNode> = serde_wasm_bindgen::from_value(files)?;
+    let parsed_headings: Vec<PaletteHeading> = serde_wasm_bindgen::from_value(headings)?;
+    let results: Vec<PaletteResult> = palette::search_palette(&parsed_files, &parsed_headings, query);
+    to_value(&results)
+}
+
+/// 将 DOM 快照（通用 JSON 树）序列化回标准 GFM Markdown。
+#[wasm_bindgen]
+pub fn dom_to_markdown(dom: JsValue) -> Result<String, JsValue> {
+    let root: DomNode = serde_wasm_bindgen::from_value(dom)?;
+    Ok(dommd::dom_to_markdown(&root))
+}
+
+/// 文档统计：`{words, minutes}`。
+#[wasm_bindgen]
+pub fn doc_stats(raw: &str) -> Result<JsValue, JsValue> {
+    to_value(&stats::doc_stats(raw))
 }

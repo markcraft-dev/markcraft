@@ -2,16 +2,18 @@
   <transition name="modal-fade">
     <div
       v-if="visible"
-      class="fixed inset-0 z-50 flex items-start justify-center pt-12vh p-16px sm:p-24px bg-black/35 backdrop-blur-[3px] select-none"
+      class="fixed inset-0 z-50 flex items-start justify-center pt-12vh p-16px sm:p-24px bg-black/45 backdrop-blur-[6px] select-none"
       @click.self="$emit('close')"
     >
       <!-- Wide-Screen Responsive Command Palette Card -->
       <div
-        class="search-palette w-full max-w-[min(90vw,760px)] bg-[--bg-page] text-[--text-primary] rounded-2xl shadow-2xl border border-[--border-color] flex flex-col overflow-hidden animate-in"
+        class="search-palette w-full max-w-[min(90vw,760px)] bg-[--bg-page]/95 backdrop-blur-2xl text-[--text-primary] rounded-2xl shadow-2xl border border-[--border-color] flex flex-col overflow-hidden animate-in"
       >
         <!-- Top Prominent Search Input Row -->
-        <div class="flex items-center px-18px py-14px border-b border-[--border-color] bg-[--bg-page] gap-12px">
-          <SvgIcon name="search" class="w-5 h-5 text-[--text-muted] flex-shrink-0"  />
+        <div class="flex items-center px-18px py-14px border-b border-[--border-color] bg-[--bg-page]/90 gap-12px">
+          <div class="p-6px rounded-lg bg-[--primary-light] text-[--primary-color] flex-shrink-0">
+            <SvgIcon name="search" class="w-4.5 h-4.5" />
+          </div>
           <input
             ref="inputRef"
             v-model="query"
@@ -27,7 +29,7 @@
             <span v-if="query" class="text-11px text-[--text-muted] font-mono mr-4px">
               找到 {{ filteredItems.length }} 项
             </span>
-            <span class="text-11px font-mono text-[--text-muted] px-6px py-2px rounded-md bg-[--bg-subtle] border border-[--border-subtle]">ESC 关闭</span>
+            <kbd class="mdr-kbd text-10px font-mono">ESC</kbd>
           </div>
         </div>
 
@@ -45,16 +47,16 @@
               :key="item.id || item.href"
               class="flex items-center justify-between px-12px py-9px rounded-xl cursor-pointer transition-all select-none group"
               :class="selectedIndex === idx
-                ? 'bg-[--bg-active] text-[--text-primary] font-medium shadow-xs ring-1 ring-[--border-color]'
+                ? 'bg-[--bg-hover] text-[--text-primary] font-medium shadow-xs ring-1 ring-[--primary-color]/40'
                 : 'text-[--text-secondary] hover:bg-[--bg-hover] hover:text-[--text-primary]'"
               @mouseenter="selectedIndex = idx"
               @click="handleItemClick(item)"
             >
               <!-- File Name & Path Info -->
               <div class="flex items-center gap-10px min-w-0 flex-1 mr-14px">
-                <span class="p-4px rounded-lg bg-[--bg-subtle] flex-shrink-0">
-                  <SvgIcon name="file-markdown" v-if="!item.isHeading" class="w-4 h-4 text-blue-500"  />
-                  <SvgIcon name="outline" v-else class="w-4 h-4 text-[--primary-color]"  />
+                <span class="p-5px rounded-lg bg-[--bg-subtle] border border-[--border-subtle] flex-shrink-0">
+                  <SvgIcon name="file-markdown" v-if="!item.isHeading" class="w-4 h-4 text-blue-500" />
+                  <SvgIcon name="outline" v-else class="w-4 h-4 text-[--primary-color]" />
                 </span>
 
                 <div class="flex flex-col min-w-0">
@@ -71,7 +73,7 @@
               <div class="flex items-center gap-6px flex-shrink-0">
                 <span
                   v-if="selectedIndex === idx"
-                  class="text-11px font-mono text-[--primary-color] px-8px py-3px rounded-md bg-[--primary-light] font-semibold flex items-center gap-4px border border-[--primary-color]/20"
+                  class="text-11px font-mono text-[--primary-color] px-8px py-3px rounded-md bg-[--primary-light] font-semibold flex items-center gap-4px border border-[--primary-color]/25 shadow-xs"
                 >
                   ↵ 打开
                 </span>
@@ -81,7 +83,7 @@
 
           <!-- Empty State -->
           <div v-else-if="query" class="flex flex-col items-center justify-center p-36px text-center text-13px text-[--text-muted]">
-            <SvgIcon name="search" class="w-8 h-8 mb-8px opacity-20 text-[--text-muted]"  />
+            <SvgIcon name="search" class="w-8 h-8 mb-8px opacity-20 text-[--text-muted]" />
             <span>未找到与 “{{ query }}” 相关的 Markdown 文件或章节</span>
           </div>
 
@@ -96,30 +98,30 @@
               :key="action.id"
               class="flex items-center justify-between px-12px py-8px rounded-xl cursor-pointer text-13px transition-all select-none group"
               :class="selectedIndex === filteredItems.length + aIdx
-                ? 'bg-[--bg-active] text-[--text-primary] font-medium shadow-xs ring-1 ring-[--border-color]'
+                ? 'bg-[--bg-hover] text-[--text-primary] font-medium shadow-xs ring-1 ring-[--primary-color]/40'
                 : 'text-[--text-secondary] hover:bg-[--bg-hover] hover:text-[--text-primary]'"
               @mouseenter="selectedIndex = filteredItems.length + aIdx"
               @click="handleActionClick(action)"
             >
               <div class="flex items-center gap-10px">
-                <span class="p-4px rounded-lg bg-[--bg-subtle] flex-shrink-0 text-[--text-muted] group-hover:text-[--text-primary] transition-colors">
+                <span class="p-5px rounded-lg bg-[--bg-subtle] border border-[--border-subtle] flex-shrink-0 text-[--text-muted] group-hover:text-[--text-primary] transition-colors">
                   <SvgIcon :name="action.icon" class="w-4 h-4" />
                 </span>
                 <span class="font-medium">{{ action.title }}</span>
               </div>
-              <span class="text-11px font-mono text-[--text-muted] px-6px py-2px rounded-md bg-[--bg-subtle] border border-[--border-subtle]">
+              <kbd class="mdr-kbd text-10px font-mono">
                 {{ action.shortcut }}
-              </span>
+              </kbd>
             </div>
           </div>
         </div>
 
         <!-- Footer Bar with Keyboard Hints -->
-        <div class="px-16px py-9px border-t border-[--border-color] bg-[--bg-subtle] flex items-center justify-between text-11px text-[--text-muted]">
+        <div class="px-16px py-9px border-t border-[--border-color] bg-[--bg-subtle]/80 flex items-center justify-between text-11px text-[--text-muted]">
           <div class="flex items-center gap-14px">
-            <span><strong class="font-mono font-medium text-[--text-secondary]">↑ / ↓</strong> 选择</span>
-            <span><strong class="font-mono font-medium text-[--text-secondary]">↵</strong> 打开</span>
-            <span><strong class="font-mono font-medium text-[--text-secondary]">ESC</strong> 关闭</span>
+            <span class="flex items-center gap-4px"><kbd class="mdr-kbd text-10px font-mono">↑</kbd><kbd class="mdr-kbd text-10px font-mono">↓</kbd> 导航</span>
+            <span class="flex items-center gap-4px"><kbd class="mdr-kbd text-10px font-mono">↵</kbd> 确认</span>
+            <span class="flex items-center gap-4px"><kbd class="mdr-kbd text-10px font-mono">ESC</kbd> 退出</span>
           </div>
           <span class="font-mono text-10px opacity-60">MarkCraft Quick Open</span>
         </div>
@@ -131,15 +133,10 @@
 <script setup lang="ts">
 import SvgIcon from '@/components/SvgIcon.vue'
 import { ref, computed, watch, nextTick } from 'vue'
+import { searchPalette, type PaletteItem } from '../core/palette'
 import type { TreeNodeItem, OutlineItem } from '@/shared/types'
 
-export interface PaletteItem {
-  id: string
-  title: string
-  href: string
-  subPath?: string
-  isHeading?: boolean
-}
+export type { PaletteItem }
 
 const props = defineProps<{
   visible: boolean
@@ -169,47 +166,22 @@ const actions = [
   { id: 'print', title: '打印 / 导出 PDF', shortcut: '⌘P', icon: 'printer' }
 ]
 
-function flattenTree(nodes: TreeNodeItem[]): PaletteItem[] {
-  const result: PaletteItem[] = []
-  const traverse = (items: TreeNodeItem[], path = '') => {
-    for (const item of items) {
-      if (item.isFolder && item.children) {
-        traverse(item.children, `${path}${item.content}/`)
-      } else if (!item.isFolder) {
-        result.push({
-          id: item.href,
-          title: item.content,
-          href: item.href,
-          subPath: path.replace(/\/$/, '')
-        })
-      }
+// 条目汇总与过滤位于 Rust（search_palette），此处仅异步取回结果
+const filteredItems = ref<PaletteItem[]>([])
+let searchSeq = 0
+
+watch(
+  [() => props.visible, () => props.files, () => props.headings, query],
+  async () => {
+    const seq = ++searchSeq
+    const items = await searchPalette(props.files, props.headings, query.value)
+    if (seq === searchSeq) {
+      filteredItems.value = items
+      selectedIndex.value = 0
     }
-  }
-  traverse(nodes)
-  return result
-}
-
-const allItems = computed<PaletteItem[]>(() => {
-  const fileItems = flattenTree(props.files)
-  const headingItems: PaletteItem[] = (props.headings || []).map((h) => ({
-    id: h.id,
-    title: h.content,
-    href: h.href,
-    subPath: `文章大纲 H${h.level} 章节`,
-    isHeading: true
-  }))
-  return [...fileItems, ...headingItems]
-})
-
-const filteredItems = computed(() => {
-  const q = query.value.trim().toLowerCase()
-  if (!q) {
-    return allItems.value.slice(0, 12)
-  }
-  return allItems.value
-    .filter((i) => i.title.toLowerCase().includes(q) || (i.subPath && i.subPath.toLowerCase().includes(q)))
-    .slice(0, 16)
-})
+  },
+  { immediate: true }
+)
 
 const totalCount = computed(() => filteredItems.value.length + actions.length)
 

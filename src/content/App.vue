@@ -7,6 +7,10 @@
       :right-open="rightSideOpen"
       :is-local="isLocal"
       :is-edit-mode="isEditMode"
+      :is-dirty="isDirty"
+      :doc-title="currentDocTitle"
+      :folder-name="currentDocFolder"
+      :read-progress="readingProgress"
       @toggle-left-side="leftSideOpen = !leftSideOpen"
       @toggle-right-side="rightSideOpen = !rightSideOpen"
       @toggle-theme="toggleTheme"
@@ -121,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import TopHeader from './components/TopHeader.vue'
 import Side from './components/Side.vue'
 import RightSidebar from './components/RightSidebar.vue'
@@ -151,7 +155,8 @@ const rightSideOpen = ref(window.innerWidth > 1200)
 const leftSideWidth = ref(260)
 const rightSideWidth = ref(250)
 
-const currentTheme = ref<'auto' | 'light' | 'dark'>('auto')
+const currentTheme = ref<'auto' | 'light' | 'dark' | 'sepia' | 'nordic'>('auto')
+const readingProgress = ref(0)
 const settingsVisible = ref(false)
 const searchVisible = ref(false)
 const isEditMode = ref(false)
@@ -159,6 +164,35 @@ const isDirty = ref(false)
 const rawMarkdownContent = ref(props.initialContent)
 const renderedHtml = ref('')
 const currentActiveHref = ref(window.location.href)
+
+const currentDocTitle = computed(() => {
+  try {
+    const url = currentActiveHref.value
+    const clean = url.split('?')[0].split('#')[0]
+    const file = clean.split('/').pop() || ''
+    return decodeURIComponent(file) || 'Markdown'
+  } catch {
+    return 'Markdown'
+  }
+})
+
+const currentDocFolder = computed(() => {
+  try {
+    const url = currentActiveHref.value
+    const clean = url.split('?')[0].split('#')[0]
+    const parts = clean.split('/')
+    if (parts.length >= 2) {
+      return decodeURIComponent(parts[parts.length - 2])
+    }
+  } catch {}
+  return ''
+})
+
+function updateReadingProgress() {
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0
+  const docHeight = document.documentElement.scrollHeight - window.innerHeight
+  readingProgress.value = docHeight > 0 ? Math.min(100, Math.max(0, (scrollTop / docHeight) * 100)) : 0
+}
 const contentRef = ref<HTMLElement | null>(null)
 const sideRef = ref<InstanceType<typeof Side> | null>(null)
 const outlineData = ref<{ tree: OutlineItem[]; list: OutlineItem[] }>({ tree: [], list: [] })
@@ -185,7 +219,7 @@ async function updateMarkdown(rawText: string) {
   await nextTick()
 
   if (contentRef.value) {
-    outlineData.value = extractOutline(contentRef.value, settings.value.maxOutlineExpandLevel)
+    outlineData.value = await extractOutline(contentRef.value, settings.value.maxOutlineExpandLevel)
     enhanceContentBlocks(contentRef.value, openLightbox)
   }
 
@@ -215,16 +249,16 @@ function toggleEditMode() {
   }
 }
 
-function handleInPlaceInput() {
+async function handleInPlaceInput() {
   isDirty.value = true
   if (contentRef.value) {
-    outlineData.value = extractOutline(contentRef.value, settings.value.maxOutlineExpandLevel)
+    outlineData.value = await extractOutline(contentRef.value, settings.value.maxOutlineExpandLevel)
   }
 }
 
 async function saveInPlace(): Promise<boolean> {
   if (!contentRef.value) return false
-  const newMarkdown = domToMarkdown(contentRef.value)
+  const newMarkdown = await domToMarkdown(contentRef.value)
   const fileUrl = currentActiveHref.value
   const fileName = decodeURIComponent(fileUrl.split('/').pop() || 'document.md')
 
@@ -287,7 +321,7 @@ async function finishInPlaceEdit() {
   }
 
   if (contentRef.value) {
-    const newMarkdown = domToMarkdown(contentRef.value)
+    const newMarkdown = await domToMarkdown(contentRef.value)
     rawMarkdownContent.value = newMarkdown
     updateMarkdown(newMarkdown)
   }
@@ -304,9 +338,19 @@ function cancelInPlaceEdit() {
 }
 
 function toggleTheme() {
-  const next = currentTheme.value === 'dark' ? 'light' : currentTheme.value === 'light' ? 'auto' : 'dark'
+  const sequence: Array<'auto' | 'light' | 'sepia' | 'dark' | 'nordic'> = [
+    'auto',
+    'light',
+    'sepia',
+    'dark',
+    'nordic'
+  ]
+  const curIdx = sequence.indexOf(currentTheme.value)
+  const next = sequence[(curIdx + 1) % sequence.length]
   currentTheme.value = next
   applyTheme(next)
+  settings.value.pageTheme = next
+  useStorage().saveSettings({ pageTheme: next })
 }
 
 function handlePaletteSelectFile(item: PaletteItem) {
@@ -363,7 +407,7 @@ async function handlePaletteAction(actionId: string) {
     showToast('✓ 已成功导出单文件 HTML')
   } else if (actionId === 'export-md') {
     const docTitle = document.title || 'document'
-    const md = contentRef.value && isEditMode.value ? domToMarkdown(contentRef.value) : rawMarkdownContent.value
+    const md = contentRef.value && isEditMode.value ? await domToMarkdown(contentRef.value) : rawMarkdownContent.value
     const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -411,6 +455,8 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleGlobalKeydown)
+  window.addEventListener('scroll', updateReadingProgress, { passive: true })
+  updateReadingProgress()
   await loadSettings()
   currentTheme.value = settings.value.pageTheme || 'auto'
   applyTheme(currentTheme.value)
@@ -437,6 +483,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
+  window.removeEventListener('scroll', updateReadingProgress)
 })
 </script>
 

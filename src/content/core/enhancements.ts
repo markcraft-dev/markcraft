@@ -30,10 +30,20 @@ export function enhanceContentBlocks(
     const header = document.createElement('div')
     header.className = 'mdr-code-header'
 
+    const left = document.createElement('div')
+    left.className = 'mdr-code-header-left'
+
+    const dots = document.createElement('div')
+    dots.className = 'mdr-code-dots'
+    dots.innerHTML = '<span class="dot dot-red"></span><span class="dot dot-yellow"></span><span class="dot dot-green"></span>'
+    left.appendChild(dots)
+
     const langSpan = document.createElement('span')
     langSpan.className = 'mdr-code-lang'
     langSpan.textContent = lang || 'CODE'
-    header.appendChild(langSpan)
+    left.appendChild(langSpan)
+
+    header.appendChild(left)
 
     const copyBtn = document.createElement('button')
     copyBtn.className = 'mdr-code-copy-btn'

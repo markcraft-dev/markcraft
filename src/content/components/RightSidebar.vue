@@ -1,34 +1,33 @@
 <template>
   <aside
-    class="mdr-right-side fixed top-54px right-14px bottom-14px z-30 flex flex-col bg-[--bg-card] text-[--text-primary] rounded-2xl border border-[--border-color] shadow-sm select-none print:hidden overflow-hidden transition-[width,transform] duration-200"
+    class="mdr-right-side fixed top-54px right-14px bottom-14px z-30 flex flex-col bg-[--bg-card]/92 backdrop-blur-xl text-[--text-primary] rounded-2xl border border-[--border-color] shadow-lg select-none print:hidden overflow-hidden transition-[width,transform] duration-200"
     :style="{ width: `${width}px` }"
   >
-    <!-- Card Header (extension floating Panel Style with Quick Filter) -->
-    <div class="p-10px px-14px border-b border-[--border-color] flex flex-col gap-6px bg-[--bg-card]">
+    <!-- Card Header (Reading Radar Mini-Dashboard with Quick Filter) -->
+    <div class="p-10px px-14px border-b border-[--border-color] flex flex-col gap-6px bg-[--bg-card]/80 backdrop-blur-sm">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-6px">
-          <SvgIcon name="outline" class="w-4 h-4 text-[--primary-color]"  />
+          <SvgIcon name="outline" class="w-4 h-4 text-[--primary-color]" />
           <span class="text-12px font-bold text-[--text-primary] tracking-tight">文章大纲</span>
-          <span v-if="outlineList.length > 0" class="text-10px font-mono text-[--text-muted] px-5px py-1px rounded bg-[--bg-subtle]">
+          <span v-if="outlineList.length > 0" class="text-10px font-mono text-[--text-muted] px-5px py-1px rounded-full bg-[--bg-subtle] border border-[--border-subtle]">
             {{ outlineList.length }}
           </span>
         </div>
 
-        <div class="flex items-center gap-6px text-11px font-mono text-[--text-muted]">
-          <span title="预计阅读时间">{{ readingTime }}m</span>
-          <span>•</span>
-          <span title="文档总字数">{{ wordCount }}字</span>
+        <div class="flex items-center gap-4px text-10px font-mono text-[--text-muted]">
+          <span class="px-5px py-1.5px rounded bg-[--bg-subtle] border border-[--border-subtle]" title="预计阅读时间">⏱️ {{ readingTime }}m</span>
+          <span class="px-5px py-1.5px rounded bg-[--bg-subtle] border border-[--border-subtle]" title="文档总字数">📝 {{ wordCount }}字</span>
         </div>
       </div>
 
       <!-- Outline Filter Input (Appears when outline is long > 8) -->
       <div v-if="outlineList.length > 8" class="relative flex items-center w-full mt-2px">
-        <SvgIcon name="search" class="absolute left-8px w-3 h-3 text-[--text-muted] pointer-events-none"  />
+        <SvgIcon name="search" class="absolute left-8px w-3 h-3 text-[--text-muted] pointer-events-none" />
         <input
           v-model="filterKey"
           type="text"
           placeholder="过滤章节标题..."
-          class="w-full h-26px box-border pl-24px pr-22px py-0 text-11px rounded-md bg-[--bg-subtle] border border-[--border-subtle] text-[--text-primary] placeholder-[--text-muted] transition-all focus:outline-none focus:border-[--primary-color]"
+          class="w-full h-26px box-border pl-24px pr-22px py-0 text-11px rounded-lg bg-[--bg-subtle] border border-[--border-subtle] text-[--text-primary] placeholder-[--text-muted] transition-all focus:outline-none focus:border-[--primary-color]"
         />
         <button
           v-if="filterKey"
@@ -36,18 +35,21 @@
           title="清空"
           @click="filterKey = ''"
         >
-          <SvgIcon name="close" class="w-2.5 h-2.5"  />
+          <SvgIcon name="close" class="w-2.5 h-2.5" />
         </button>
       </div>
     </div>
 
-    <!-- Outline Heading Items with Sleek Scrollbar -->
+    <!-- Outline Heading Items with Sleek Scrollbar & Tree Spine -->
     <div
       ref="outlineContainerRef"
-      class="outline-scroll-container flex-1 overflow-y-auto p-8px space-y-1px"
+      class="outline-scroll-container flex-1 overflow-y-auto p-8px space-y-1px relative"
     >
+      <!-- Continuous Guide Spine Line -->
+      <div class="absolute left-14px top-12px bottom-12px w-1px bg-[--border-subtle] pointer-events-none"></div>
+
       <div v-if="filteredOutline.length === 0" class="flex flex-col items-center justify-center p-28px text-center text-12px text-[--text-muted]">
-        <SvgIcon name="outline" class="w-7 h-7 mb-6px opacity-25 text-[--text-muted]"  />
+        <SvgIcon name="outline" class="w-7 h-7 mb-6px opacity-25 text-[--text-muted]" />
         <span>{{ filterKey ? '未找到匹配章节' : '当前文档暂无标题' }}</span>
       </div>
 
@@ -55,13 +57,18 @@
         v-for="item in filteredOutline"
         :key="item.id"
         :data-heading-id="item.href.slice(1)"
-        class="outline-item-row py-5px px-8px rounded-lg hover:bg-[--bg-hover] text-[--text-secondary] hover:text-[--text-primary] cursor-pointer text-12px truncate transition-colors leading-relaxed"
-        :style="{ paddingLeft: `${(item.level - 1) * 10 + 8}px` }"
-        :class="{ 'font-semibold text-[--primary-color] bg-[--primary-light]': activeId === item.href.slice(1) }"
+        class="outline-item-row relative py-5px px-8px rounded-lg hover:bg-[--bg-hover] text-[--text-secondary] hover:text-[--text-primary] cursor-pointer text-12px truncate transition-colors leading-relaxed group"
+        :style="{ paddingLeft: `${(item.level - 1) * 11 + 16}px` }"
+        :class="{ 'font-semibold text-[--primary-color] bg-[--primary-light] shadow-xs': activeId === item.href.slice(1) }"
         :title="item.content"
         @click="handleClick(item)"
       >
-        {{ item.content }}
+        <!-- Active Pip on the Guide Line -->
+        <span
+          v-if="activeId === item.href.slice(1)"
+          class="absolute left-5px top-7px bottom-7px w-2px rounded-full bg-[--primary-color]"
+        ></span>
+        <span class="truncate">{{ item.content }}</span>
       </div>
     </div>
 
@@ -77,6 +84,7 @@
 <script setup lang="ts">
 import SvgIcon from '@/components/SvgIcon.vue'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { computeDocStats } from '../core/doc-stats'
 import type { OutlineItem } from '@/shared/types'
 
 const props = withDefaults(
@@ -103,16 +111,19 @@ const outlineContainerRef = ref<HTMLElement | null>(null)
 let isClicking = false
 let clickResetTimer: number | null = null
 
-const wordCount = computed(() => {
-  if (!props.rawContent) return 0
-  const clean = props.rawContent.replace(/[\s\r\n\t]+/g, '')
-  return clean.length
-})
+// 字数统计与阅读时长计算位于 Rust（doc_stats）
+const wordCount = ref(0)
+const readingTime = ref(1)
 
-const readingTime = computed(() => {
-  const words = wordCount.value
-  return Math.max(1, Math.ceil(words / 400))
-})
+watch(
+  () => props.rawContent,
+  async (raw) => {
+    const stats = await computeDocStats(raw || '')
+    wordCount.value = stats.words
+    readingTime.value = stats.minutes
+  },
+  { immediate: true }
+)
 
 const filteredOutline = computed(() => {
   if (!filterKey.value.trim()) return props.outlineList

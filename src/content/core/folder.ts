@@ -1,4 +1,5 @@
 import type { TreeNodeItem } from '@/shared/types'
+import { loadAnalyzer } from './wasm_analyzer'
 import { parseDirectory, type ParsedDirectoryItem } from './wasm_directory'
 
 const MD_EXTENSIONS = ['.md', '.mkd', '.markdown', '.txt', '.mdx', '.mdc']
@@ -55,6 +56,45 @@ export function getAncestorFolderURLs(rootUrl: string, targetFileUrl: string): s
 }
 
 /**
+ * 祖先目录推导优先走 WASM，失败时回退到上方等价 JS 实现。
+ */
+export async function resolveAncestorFolderURLs(rootUrl: string, targetFileUrl: string): Promise<string[]> {
+  const analyzer = await loadAnalyzer()
+  if (analyzer) {
+    try {
+      const urls = analyzer.ancestor_folder_urls(rootUrl, targetFileUrl)
+      if (Array.isArray(urls)) return urls as string[]
+    } catch {
+      // 回退到 JS 实现
+    }
+  }
+  return getAncestorFolderURLs(rootUrl, targetFileUrl)
+}
+
+/**
+ * 解析目录 HTML 中的条目：优先走 WASM 过滤（隐藏文件 / 非 Markdown 规则在 Rust 端），
+ * 失败时回退到 parseDirectory + 本地过滤。
+ */
+async function parseDirectoryItems(html: string): Promise<ParsedDirectoryItem[]> {
+  const analyzer = await loadAnalyzer()
+  if (analyzer) {
+    try {
+      const filtered = analyzer.filter_directory(html)
+      if (Array.isArray(filtered)) return filtered as ParsedDirectoryItem[]
+    } catch {
+      // 回退到 JS 实现
+    }
+  }
+
+  return (await parseDirectory(html)).filter((item) => {
+    if (item.name.startsWith('.')) return false
+    if (item.is_folder) return true
+    const lowerName = (item.name || '').toLowerCase()
+    return MD_EXTENSIONS.some((ext) => lowerName.endsWith(ext))
+  })
+}
+
+/**
  * Check if a folder directly or indirectly contains Markdown files
  */
 async function hasMarkdownContent(folderUrl: string, depth = 0): Promise<boolean> {
@@ -64,6 +104,27 @@ async function hasMarkdownContent(folderUrl: string, depth = 0): Promise<boolean
   try {
     const html = await fetchDirectoryHtml(url)
     if (!html) return false
+
+    // 单页扫描（Markdown 判定与子目录收集）优先走 WASM
+    const analyzer = await loadAnalyzer()
+    if (analyzer) {
+      try {
+        const scan = analyzer.scan_directory(html, url) as
+          | { has_markdown?: boolean; subfolders?: string[] }
+          | null
+        if (scan && typeof scan.has_markdown === 'boolean' && Array.isArray(scan.subfolders)) {
+          if (scan.has_markdown) return true
+          const subfolders = scan.subfolders
+          if (subfolders.length > 0) {
+            const results = await Promise.all(subfolders.map((sub) => hasMarkdownContent(sub, depth + 1)))
+            return results.some(Boolean)
+          }
+          return false
+        }
+      } catch {
+        // 回退到 JS 实现
+      }
+    }
 
     const subfolders: string[] = []
 
@@ -116,7 +177,7 @@ export async function fetchDirectory(
   }
 
   const rawItems: any[] = []
-  for (const item of await parseDirectory(html)) {
+  for (const item of await parseDirectoryItems(html)) {
     const name = item.name
     const isFolder = item.is_folder
     const lowerName = (name || '').toLowerCase()

@@ -29,7 +29,7 @@ export interface OutlineItem {
 }
 
 export interface UserSettings {
-  pageTheme: 'auto' | 'light' | 'dark'
+  pageTheme: 'auto' | 'light' | 'dark' | 'sepia' | 'nordic'
   textFont: string
   textSize: string
   sideWidth?: number
@@ -48,7 +48,7 @@ export interface AppState {
   isLocal: boolean
   isDir: boolean
   currentSideType: 'folder' | 'outline'
-  pageTheme: 'auto' | 'light' | 'dark'
+  pageTheme: 'auto' | 'light' | 'dark' | 'sepia' | 'nordic'
   sideCollapsed: boolean
   sideExpanded: boolean
   sideHover: boolean
