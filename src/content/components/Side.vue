@@ -86,7 +86,7 @@ import { ref, computed, onMounted } from 'vue'
 import TreeNode from './TreeNode.vue'
 import IconButton from '@/components/IconButton.vue'
 import IconLogo from '@/components/icons/IconLogo.vue'
-import { fetchDirectory, getParentFolderURL, getAncestorFolderURLs } from '../core/folder'
+import { fetchDirectory, getParentFolderURL, resolveAncestorFolderURLs } from '../core/folder'
 import type { TreeNodeItem } from '@/shared/types'
 
 const STORAGE_ROOT_KEY = 'markcraft_workspace_root'
@@ -186,7 +186,7 @@ async function loadFolderTree(url?: string) {
 
   const expanded = getSavedExpanded()
 
-  const ancestors = getAncestorFolderURLs(root, activeHref.value)
+  const ancestors = await resolveAncestorFolderURLs(root, activeHref.value)
   ancestors.forEach((a) => expanded.add(a))
   saveExpanded(expanded)
 

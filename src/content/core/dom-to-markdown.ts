@@ -1,13 +1,78 @@
 /**
  * MarkCraft DOM-to-Markdown Serializer
  * Accurately converts contenteditable HTML DOM back into standard GitHub Flavored Markdown (GFM).
+ *
+ * 转换规则全部位于 Rust（wasm/markdown_analyzer 的 dom_to_markdown）；
+ * JS 端只负责采集通用 DOM 快照，并在 WASM 不可用时回退到本地等价实现。
  */
+import { loadAnalyzer } from './wasm_analyzer'
 
-export function domToMarkdown(root: HTMLElement): string {
+interface SerializedNode {
+  tag?: string
+  classes?: string[]
+  attrs?: Record<string, string>
+  text?: string
+  children?: SerializedNode[]
+}
+
+// MarkCraft 注入的 UI 辅助元素，序列化时整体剔除
+const UI_HELPER_SELECTOR = '.mdr-code-copy-btn, .mdr-image-wrapper button, .mdr-in-place-toolbar'
+
+/**
+ * 通用 DOM 快照：仅采集标签、类名、属性、文本与复选框状态，
+ * 不包含任何 Markdown 转换规则。
+ */
+function serializeNode(node: Node): SerializedNode | null {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return { text: node.textContent || '' }
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return null
+  }
+  const el = node as HTMLElement
+  if (el.closest(UI_HELPER_SELECTOR)) {
+    return null
+  }
+  const attrs: Record<string, string> = {}
+  for (const attr of Array.from(el.attributes)) {
+    attrs[attr.name] = attr.value
+  }
+  // 复选框的用户勾选状态只存在于 property，不反映在 attribute 中
+  if (el instanceof HTMLInputElement && el.type === 'checkbox') {
+    attrs.checked = el.checked ? 'true' : 'false'
+  }
+  const children: SerializedNode[] = []
+  el.childNodes.forEach((child) => {
+    const serialized = serializeNode(child)
+    if (serialized) children.push(serialized)
+  })
+  return {
+    tag: el.tagName.toLowerCase(),
+    classes: Array.from(el.classList),
+    attrs,
+    children
+  }
+}
+
+export async function domToMarkdown(root: HTMLElement): Promise<string> {
+  const analyzer = await loadAnalyzer()
+  if (analyzer) {
+    try {
+      const result = analyzer.dom_to_markdown(serializeNode(root))
+      if (typeof result === 'string') return result
+    } catch {
+      // 回退到 JS 实现
+    }
+  }
+  return domToMarkdownFallback(root)
+}
+
+/** JS 回退实现：与 WASM 版规则保持一致。 */
+function domToMarkdownFallback(root: HTMLElement): string {
   const clone = root.cloneNode(true) as HTMLElement
 
   // Remove UI helper elements injected by MarkCraft (copy buttons, lightbox overlays, etc.)
-  clone.querySelectorAll('.mdr-code-copy-btn, .mdr-image-wrapper button, .mdr-in-place-toolbar').forEach((el) => el.remove())
+  clone.querySelectorAll(UI_HELPER_SELECTOR).forEach((el) => el.remove())
 
   return nodeToMarkdown(clone).trim() + '\n'
 }

@@ -1,7 +1,7 @@
 <template>
-  <header class="mdr-top-header fixed top-0 left-0 right-0 h-44px z-40 flex items-center justify-between px-14px bg-[--bg-page] border-b border-[--border-color] print:hidden select-none transition-colors">
-    <!-- Left Section: Sidebar Toggle & Back / Forward Buttons (extension style) -->
-    <div class="flex items-center gap-4px min-w-0 flex-shrink-0">
+  <header class="mdr-top-header fixed top-0 left-0 right-0 h-44px z-40 flex items-center justify-between px-12px bg-[--bg-page]/85 backdrop-blur-xl border-b border-[--border-color] print:hidden select-none transition-colors">
+    <!-- Left Section: Sidebar Toggle & History Navigation Island -->
+    <div class="flex items-center gap-2px p-2px rounded-lg bg-[--bg-subtle]/50 border border-[--border-subtle] min-w-0 flex-shrink-0">
       <!-- Toggle Left Sidebar Button -->
       <IconButton
         v-if="isLocal"
@@ -10,7 +10,7 @@
         :active="leftOpen"
         @click="$emit('toggle-left-side')"
       >
-        <SvgIcon name="sidebar-left" class="w-4 h-4"  />
+        <SvgIcon name="sidebar-left" class="w-4 h-4" />
       </IconButton>
 
       <!-- History Back Button -->
@@ -19,7 +19,7 @@
         shortcut="⌘["
         @click="goBack"
       >
-        <SvgIcon name="arrow-left" class="w-4 h-4"  />
+        <SvgIcon name="arrow-left" class="w-4 h-4" />
       </IconButton>
 
       <!-- History Forward Button -->
@@ -28,33 +28,53 @@
         shortcut="⌘]"
         @click="goForward"
       >
-        <SvgIcon name="arrow-right" class="w-4 h-4"  />
+        <SvgIcon name="arrow-right" class="w-4 h-4" />
       </IconButton>
     </div>
 
-    <!-- Center Section: Clean -->
-    <div class="flex-1"></div>
+    <!-- Center Section: Interactive Breadcrumb Capsule (Fills the Void) -->
+    <div class="flex-1 flex items-center justify-center px-12px min-w-0">
+      <button
+        class="breadcrumb-capsule flex items-center gap-6px py-4px px-12px rounded-full bg-[--bg-subtle]/70 hover:bg-[--bg-hover] border border-[--border-color] text-12px transition-colors cursor-pointer max-w-[min(500px,50vw)] group"
+        title="点击快速搜索与跳转文件 (⌘K)"
+        @click="$emit('open-search')"
+      >
+        <SvgIcon name="folder" class="w-3.5 h-3.5 text-[--text-muted] flex-shrink-0" />
+        <span v-if="folderName" class="text-[--text-muted] font-medium truncate max-w-120px">{{ folderName }}</span>
+        <span v-if="folderName" class="text-[--text-muted] opacity-35 font-mono">/</span>
+        <SvgIcon name="file-markdown" class="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+        <span class="text-[--text-primary] font-semibold truncate">{{ docTitle || 'MarkCraft' }}</span>
+        <span
+          v-if="isEditMode"
+          class="ml-4px px-6px py-1px rounded-full text-10px font-mono flex items-center gap-4px"
+          :class="isDirty ? 'bg-amber-500/15 text-amber-500 font-medium' : 'bg-emerald-500/15 text-emerald-500 font-medium'"
+        >
+          <span class="w-1.5 h-1.5 rounded-full" :class="isDirty ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'"></span>
+          {{ isDirty ? '编辑中*' : '已保存' }}
+        </span>
+      </button>
+    </div>
 
-    <!-- Right Section: Clean Icon Actions (extension style) -->
-    <div class="flex items-center gap-4px flex-shrink-0">
+    <!-- Right Section: Tools Island -->
+    <div class="flex items-center gap-2px p-2px rounded-lg bg-[--bg-subtle]/50 border border-[--border-subtle] flex-shrink-0">
       <!-- Search Palette Button -->
       <IconButton
         title="搜索"
         shortcut="⌘K"
         @click="$emit('open-search')"
       >
-        <SvgIcon name="search" class="w-4 h-4"  />
+        <SvgIcon name="search" class="w-4 h-4" />
       </IconButton>
 
-      <!-- Toggle Edit / Preview Mode (WYSIWYG Online Editor) -->
+      <!-- Toggle Edit / Preview Mode -->
       <IconButton
         :title="isEditMode ? '完成编辑并返回阅读视图' : '在线编辑文档'"
         shortcut="⌘E"
         :active="isEditMode"
         @click="$emit('toggle-edit')"
       >
-        <SvgIcon name="eye" v-if="isEditMode" class="w-4 h-4"  />
-        <SvgIcon name="edit" v-else class="w-4 h-4"  />
+        <SvgIcon name="eye" v-if="isEditMode" class="w-4 h-4" />
+        <SvgIcon name="edit" v-else class="w-4 h-4" />
       </IconButton>
 
       <!-- Toggle Fullscreen -->
@@ -63,8 +83,8 @@
         shortcut="⌘F"
         @click="toggleFullscreen"
       >
-        <SvgIcon name="minimize" v-if="isFullscreen" class="w-4 h-4"  />
-        <SvgIcon name="maximize" v-else class="w-4 h-4"  />
+        <SvgIcon name="minimize" v-if="isFullscreen" class="w-4 h-4" />
+        <SvgIcon name="maximize" v-else class="w-4 h-4" />
       </IconButton>
 
       <!-- Print Document -->
@@ -73,7 +93,7 @@
         shortcut="⌘P"
         @click="printDocument"
       >
-        <SvgIcon name="printer" class="w-4 h-4"  />
+        <SvgIcon name="printer" class="w-4 h-4" />
       </IconButton>
 
       <!-- Theme Switcher -->
@@ -82,18 +102,20 @@
         shortcut="⌘T"
         @click="$emit('toggle-theme')"
       >
-        <SvgIcon name="sun" v-if="theme === 'light'" class="w-4 h-4 text-amber-500"  />
-        <SvgIcon name="moon" v-else-if="theme === 'dark'" class="w-4 h-4 text-indigo-400"  />
-        <SvgIcon name="device-auto" v-else class="w-4 h-4"  />
+        <SvgIcon name="sun" v-if="theme === 'light'" class="w-4 h-4 text-amber-500" />
+        <SvgIcon name="sun" v-else-if="theme === 'sepia'" class="w-4 h-4 text-amber-600" />
+        <SvgIcon name="moon" v-else-if="theme === 'dark'" class="w-4 h-4 text-indigo-400" />
+        <SvgIcon name="moon" v-else-if="theme === 'nordic'" class="w-4 h-4 text-sky-400" />
+        <SvgIcon name="device-auto" v-else class="w-4 h-4" />
       </IconButton>
 
-      <!-- Preferences Settings (Classic Gear) -->
+      <!-- Preferences Settings -->
       <IconButton
         title="偏好设置"
         shortcut="⌘,"
         @click="$emit('open-settings')"
       >
-        <SvgIcon name="settings" class="w-4 h-4"  />
+        <SvgIcon name="settings" class="w-4 h-4" />
       </IconButton>
 
       <div class="w-1px h-14px bg-[--border-color] mx-2px"></div>
@@ -105,8 +127,16 @@
         :active="rightOpen"
         @click="$emit('toggle-right-side')"
       >
-        <SvgIcon name="sliders-horizontal" class="w-4 h-4"  />
+        <SvgIcon name="sliders-horizontal" class="w-4 h-4" />
       </IconButton>
+    </div>
+
+    <!-- 2px Ambient Reading Progress Rail -->
+    <div class="absolute bottom-0 left-0 right-0 h-2px pointer-events-none overflow-hidden bg-[--border-subtle]">
+      <div
+        class="h-full transition-[width] duration-150 ease-out bg-gradient-to-r from-[--primary-color] via-indigo-500 to-purple-500"
+        :style="{ width: `${readProgress || 0}%` }"
+      ></div>
     </div>
   </header>
 </template>
@@ -117,11 +147,15 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import IconButton from '@/components/IconButton.vue'
 
 const props = defineProps<{
-  theme: 'auto' | 'light' | 'dark'
+  theme: 'auto' | 'light' | 'dark' | 'sepia' | 'nordic'
   leftOpen: boolean
   rightOpen: boolean
   isLocal: boolean
   isEditMode?: boolean
+  isDirty?: boolean
+  docTitle?: string
+  folderName?: string
+  readProgress?: number
 }>()
 
 defineEmits<{
@@ -136,9 +170,11 @@ defineEmits<{
 const isFullscreen = ref(false)
 
 const themeTitle = computed(() => {
-  if (props.theme === 'dark') return '切换为浅色主题'
-  if (props.theme === 'light') return '切换为跟随系统'
-  return '切换为深色主题'
+  if (props.theme === 'light') return '当前: 明亮模式 (点击切换羊皮纸)'
+  if (props.theme === 'sepia') return '当前: 羊皮纸模式 (点击切换暗黑)'
+  if (props.theme === 'dark') return '当前: 暗黑极夜 (点击切换北欧冷雾)'
+  if (props.theme === 'nordic') return '当前: 北欧冷雾 (点击切换跟随系统)'
+  return '当前: 跟随系统 (点击切换明亮)'
 })
 
 function goBack() {

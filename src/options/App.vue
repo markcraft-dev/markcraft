@@ -16,22 +16,20 @@
         <div class="grid grid-cols-2 gap-16px text-13px">
           <div class="p-16px rounded-xl bg-[--bg-subtle] border border-[--border-subtle]">
             <label class="block font-medium text-[--text-secondary] mb-8px">默认主题</label>
-            <select v-model="settings.pageTheme" class="w-full py-7px px-10px rounded-lg border border-[--border-color] bg-[--bg-page] text-[--text-primary] focus:outline-none focus:border-[--primary-color]" @change="saveChanges">
-              <option value="auto">跟随系统 (Auto)</option>
-              <option value="light">明亮模式 (Light)</option>
-              <option value="dark">暗黑模式 (Dark)</option>
-            </select>
+            <CustomSelect
+              v-model="settings.pageTheme"
+              :options="themeSelectOptions"
+              @change="saveChanges"
+            />
           </div>
 
           <div class="p-16px rounded-xl bg-[--bg-subtle] border border-[--border-subtle]">
             <label class="block font-medium text-[--text-secondary] mb-8px">阅读字体</label>
-            <select v-model="settings.textFont" class="w-full py-7px px-10px rounded-lg border border-[--border-color] bg-[--bg-page] text-[--text-primary] focus:outline-none focus:border-[--primary-color]" @change="saveChanges">
-              <option value="Default">系统默认 (System Default)</option>
-              <option value="Inter">Inter (现代无衬线)</option>
-              <option value="Roboto">Roboto</option>
-              <option value="Merriweather">Merriweather (优雅衬线)</option>
-              <option value="NotoSerifSC">思源宋体 (Noto Serif SC)</option>
-            </select>
+            <CustomSelect
+              v-model="settings.textFont"
+              :options="fontSelectOptions"
+              @change="saveChanges"
+            />
           </div>
         </div>
       </section>
@@ -84,8 +82,25 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import CustomSelect, { type SelectOption } from '@/components/CustomSelect.vue'
 import { useStorage } from '@/shared/storage'
 import { DEFAULT_PLUGINS } from '@/shared/constants'
+
+const themeSelectOptions: SelectOption[] = [
+  { value: 'auto', label: '跟随系统', subLabel: 'Auto' },
+  { value: 'light', label: '极简工作室', subLabel: 'Zinc' },
+  { value: 'sepia', label: '温润羊皮纸', subLabel: 'Paper' },
+  { value: 'dark', label: '深空极夜', subLabel: 'Indigo' },
+  { value: 'nordic', label: '北欧冷雾', subLabel: 'Slate' }
+]
+
+const fontSelectOptions: SelectOption[] = [
+  { value: 'Default', label: '系统默认', subLabel: 'System' },
+  { value: 'Inter', label: 'Inter', subLabel: '无衬线' },
+  { value: 'Roboto', label: 'Roboto', subLabel: '现代' },
+  { value: 'Merriweather', label: 'Merriweather', subLabel: '衬线' },
+  { value: 'NotoSerifSC', label: '思源宋体', subLabel: '宋体' }
+]
 
 const { settings, loadSettings, saveSettings } = useStorage()
 const allPlugins = DEFAULT_PLUGINS
