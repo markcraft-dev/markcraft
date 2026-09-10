@@ -19,6 +19,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true
   }
 
+  if (request.type === 'native-save') {
+    // 内容脚本不能直连 connectNative，由 SW 中继到本机写入宿主
+    let responded = false
+    const respond = (msg: unknown) => {
+      if (!responded) {
+        responded = true
+        sendResponse(msg)
+      }
+    }
+    try {
+      const port = chrome.runtime.connectNative('com.markcraft.filewriter')
+      port.onMessage.addListener((msg) => {
+        respond(msg)
+        port.disconnect()
+      })
+      port.onDisconnect.addListener(() => {
+        const err = chrome.runtime.lastError?.message
+        respond({ ok: false, error: err || 'native host disconnected' })
+      })
+      port.postMessage({ path: request.path, content: request.content })
+    } catch (e: any) {
+      respond({ ok: false, error: e?.message || String(e) })
+    }
+    return true
+  }
+
   if (
     request.type === 'bg-task' ||
     request.action === 'bg-task' ||

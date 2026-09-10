@@ -22,6 +22,14 @@ npm run build
 
 `npm run build` first compiles the Rust core-algorithm crate to WASM (`npm run build:wasm`, requires `wasm-pack`) and then bundles the extension into `dist/`. Load that directory from `chrome://extensions` with Developer mode enabled.
 
+### Optional: zero-dialog saves for local files
+
+`file://` pages have an opaque origin, so Chrome blocks IndexedDB there and File System Access grants cannot persist — saves would re-prompt after every reload. Install the bundled Rust native-messaging host to overwrite the original file directly with no dialogs:
+
+```bash
+cd native-host && ./install.sh   # then reload the extension in chrome://extensions
+```
+
 ## Documentation
 
 - [中文文档](README_zh.md)

@@ -56,7 +56,8 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 | `core/doc-stats.ts` | 字数（去空白、UTF-16 口径对齐 JS `.length`）与阅读时长（400 字/分钟向上取整，最小 1），Rust `doc_stats`。 | ✅ WASM + 回退 |
 | `core/enhancements.ts` | DOM 增强：代码块包裹（macOS 圆点 + 语言标签 + 复制按钮）、图片点击灯箱。纯 DOM 操作。 | 保留 JS |
 | `core/export.ts` | 富文本复制（微信/知乎内联样式）、单文件 HTML 导出模板、Markdown 下载。 | 保留 JS |
-| `core/file-handle-storage.ts` | IndexedDB 持久化 `FileSystemFileHandle` 与 `FileSystemDirectoryHandle`：文件句柄与目录句柄双路静默保存；目录授权一次后按 URL 前缀最长匹配沿路径下钻覆盖（`create:false` 绝不新建），实现整目录免弹窗覆盖原文件。 | 保留 JS（浏览器 API） |
+| `core/file-handle-storage.ts` | IndexedDB 持久化 `FileSystemFileHandle` 与 `FileSystemDirectoryHandle`：文件句柄与目录句柄双路静默保存；目录授权一次后按 URL 前缀最长匹配沿路径下钻覆盖（`create:false` 绝不新建）。注意：`file://` 页面为透明来源，浏览器禁用其 IndexedDB，句柄仅会话内存活——跨会话零弹窗由 `core/native-save.ts`（Native Messaging 宿主）承担。 | 保留 JS（浏览器 API） |
+| `core/native-save.ts` | 经 background 中继 `chrome.runtime.connectNative`，把 `{path, content}` 交给 Rust 本机写入宿主（`native-host/`）直接覆盖原文件；宿主缺失时超时回退。 | 保留 JS（浏览器 API） |
 | `core/theme.ts` | 主题（auto/light/sepia/dark/nordic）与字体/字号/宽度/自定义 CSS 应用。 | 保留 JS |
 
 ### components/（内容脚本 UI）
@@ -88,7 +89,8 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 | `options/`（App.vue + main.ts + index.html） | 设置页：主题/字体、插件矩阵、自定义 CSS。 |
 | `content/styles/markdown.css` | 渲染文档样式。 |
 | `content/styles/style.css` | 976KB 预编译聚合样式（历史产物，含 github-markdown-css/katex/hljs/uno）。 |
-| `background/index.ts` | Service Worker：`bg-fetch` 跨域代理（绕过 file:// 与 CORS）、打开设置页、快捷键命令转发到活动标签页。 |
+| `background/index.ts` | Service Worker：`bg-fetch` 跨域代理（绕过 file:// 与 CORS）、`native-save` 中继到本机写入宿主、打开设置页、快捷键命令转发到活动标签页。 |
+| `native-host/` | **Rust 本机写入宿主**（Native Messaging，`com.markcraft.filewriter`）：接收 `{path, content}` 覆盖写回原文件；仅绝对路径且目标必须已存在（绝不新建）；`install.sh` 负责构建、按扩展目录计算 ID 并写入 Chrome 宿主清单。 |
 
 ---
 
