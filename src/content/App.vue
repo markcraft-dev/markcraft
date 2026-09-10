@@ -17,18 +17,10 @@
       @open-settings="settingsVisible = true"
       @open-search="searchVisible = true"
       @toggle-edit="toggleEditMode"
+      @save="saveInPlace"
+      @finish-edit="finishInPlaceEdit"
+      @discard-edit="cancelInPlaceEdit"
     />
-
-    <!-- In-Place Edit Floating Top Banner -->
-    <transition name="toast-fade">
-      <InPlaceEditBanner
-        v-if="isEditMode"
-        :is-dirty="isDirty"
-        @save="saveInPlace"
-        @finish="finishInPlaceEdit"
-        @cancel="cancelInPlaceEdit"
-      />
-    </transition>
 
     <!-- Floating Text Selection Formatting Toolbar (extension/Notion Style) -->
     <InPlaceFormattingToolbar
@@ -129,7 +121,6 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import TopHeader from './components/TopHeader.vue'
 import Side from './components/Side.vue'
 import RightSidebar from './components/RightSidebar.vue'
-import InPlaceEditBanner from './components/InPlaceEditBanner.vue'
 import InPlaceFormattingToolbar from './components/InPlaceFormattingToolbar.vue'
 import BackToTop from './components/BackToTop.vue'
 import SettingsModal from './components/SettingsModal.vue'

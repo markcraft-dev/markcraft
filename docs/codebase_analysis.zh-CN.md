@@ -64,13 +64,12 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 
 | 文件 | 职责 |
 |---|---|
-| `components/TopHeader.vue` | 顶栏：侧栏开关、历史导航、面包屑胶囊（文件夹/文件名/编辑状态）、搜索/编辑/全屏/打印/主题/设置按钮、阅读进度条。 |
+| `components/TopHeader.vue` | 顶栏：侧栏开关、历史导航、面包屑胶囊（文件夹/文件名/编辑状态）、搜索/编辑/全屏/打印/主题/设置按钮、阅读进度条；**编辑模式下内嵌「编辑操作岛」（保存/完成/放弃），操作固定在顶栏、不遮挡正文**。 |
 | `components/Side.vue` | 左侧文件树：工作区根记忆（sessionStorage）、展开状态持久化、返回上级、拖拽调宽、点击经 background 加载文件内容（SPA 式切换 + pushState）。 |
 | `components/TreeNode.vue` | 树节点递归组件：折叠箭头、文件夹/MD/文件图标、当前文件高亮、新标签页打开。 |
 | `components/RightSidebar.vue` | 右侧大纲卡：过滤输入、阅读时长/字数徽标（经 `doc-stats.ts` 走 WASM）、ScrollSpy 高亮、点击跳转、拖拽调宽。 |
 | `components/SearchPaletteModal.vue` | ⌘K 命令面板：搜索框 + 文件/章节结果（经 `palette.ts` 走 WASM，带请求序号防竞态）+ 8 个快捷指令 + 键盘导航。 |
 | `components/SettingsModal.vue` | 设置弹窗：主题卡、字体/字号、内容宽度、插件开关、自定义 CSS。 |
-| `components/InPlaceEditBanner.vue` | 编辑模式浮动条：保存/完成/放弃。 |
 | `components/InPlaceFormattingToolbar.vue` | 选区浮动格式化工具条（execCommand：加粗/斜体/删除线/H2/H3/P/引用/行内代码/列表/链接）。 |
 | `components/ActionBar.vue` | 旧版浮动操作栏（当前 App.vue 未挂载，保留备用）。 |
 | `components/About.vue` / `BackToTop.vue` / `ImageLightbox.vue` | 关于弹窗 / 回顶按钮（环形进度）/ 图片灯箱（缩放/下载/Esc）。 |
