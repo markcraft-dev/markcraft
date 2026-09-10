@@ -111,14 +111,17 @@ const outlineContainerRef = ref<HTMLElement | null>(null)
 let isClicking = false
 let clickResetTimer: number | null = null
 
-// 字数统计与阅读时长计算位于 Rust（doc_stats）
+// 字数统计与阅读时长计算位于 Rust（doc_stats）；序号守卫防止乱序覆盖
 const wordCount = ref(0)
 const readingTime = ref(1)
+let statsSeq = 0
 
 watch(
   () => props.rawContent,
   async (raw) => {
+    const seq = ++statsSeq
     const stats = await computeDocStats(raw || '')
+    if (seq !== statsSeq) return
     wordCount.value = stats.words
     readingTime.value = stats.minutes
   },

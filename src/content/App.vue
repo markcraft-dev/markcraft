@@ -211,8 +211,8 @@ async function updateMarkdown(rawText: string) {
   await nextTick()
 
   if (contentRef.value) {
-    outlineData.value = await extractOutline(contentRef.value, settings.value.maxOutlineExpandLevel)
     enhanceContentBlocks(contentRef.value, openLightbox)
+    await refreshOutline()
   }
 
   await renderMermaidDiagrams()
@@ -243,13 +243,27 @@ function toggleEditMode() {
 
 async function handleInPlaceInput() {
   isDirty.value = true
-  if (contentRef.value) {
-    outlineData.value = await extractOutline(contentRef.value, settings.value.maxOutlineExpandLevel)
+  await refreshOutline()
+}
+
+// 大纲异步刷新带序号守卫：快速连续输入时丢弃过期结果，避免乱序覆盖
+let outlineSeq = 0
+async function refreshOutline() {
+  if (!contentRef.value) return
+  const seq = ++outlineSeq
+  const result = await extractOutline(contentRef.value, settings.value.maxOutlineExpandLevel)
+  if (seq === outlineSeq) {
+    outlineData.value = result
   }
 }
 
 async function saveInPlace(): Promise<boolean> {
   if (!contentRef.value) return false
+  // 无修改时跳过写盘，避免无意义的磁盘写入
+  if (!isDirty.value) {
+    showToast('没有需要保存的修改')
+    return true
+  }
   const newMarkdown = await domToMarkdown(contentRef.value)
   const fileUrl = currentActiveHref.value
   const fileName = decodeURIComponent(fileUrl.split('/').pop() || 'document.md')
@@ -420,7 +434,8 @@ async function handlePaletteAction(actionId: string) {
     settingsVisible.value = true
   } else if (actionId === 'theme') {
     toggleTheme()
-  } else if (actionId === 'edit') {
+  } else if (actionId === 'raw') {
+    // 面板中该指令的 id 为 'raw'（切换原始源码/在线编辑）
     toggleEditMode()
   } else if (actionId === 'fullscreen') {
     if (!document.fullscreenElement) document.documentElement.requestFullscreen()
@@ -493,6 +508,8 @@ function handleStorageChanges(changes: Record<string, chrome.storage.StorageChan
   const next = normalizeSettings(changes.settings.newValue)
   const pluginsChanged = JSON.stringify(next.mdPlugins) !== JSON.stringify(settings.value.mdPlugins)
   settings.value = next
+  // 同步顶栏主题图标（弹窗/其他标签页修改时本页 currentTheme 不会自动更新）
+  currentTheme.value = next.pageTheme
   applyTheme(next.pageTheme)
   applyCustomStyles(
     next.enableCustomCSS ? next.customCSS : undefined,

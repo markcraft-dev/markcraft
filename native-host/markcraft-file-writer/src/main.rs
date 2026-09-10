@@ -58,10 +58,30 @@ pub fn handle_request(bytes: &[u8]) -> serde_json::Value {
     if !target.is_file() {
         return error_response("target file does not exist");
     }
-    match std::fs::write(target, content) {
+    // 原子替换：先写同目录临时文件再 rename，避免中途失败损坏原文件
+    match atomic_write(target, content) {
         Ok(()) => serde_json::json!({ "ok": true }),
-        Err(e) => error_response(&format!("write failed: {e}")),
+        Err(e) => error_response(&e),
     }
+}
+
+/// 同目录写入临时文件后原子 rename 覆盖目标；失败时清理临时文件。
+fn atomic_write(target: &Path, content: &str) -> Result<(), String> {
+    let file_name = target
+        .file_name()
+        .ok_or_else(|| "target has no file name".to_string())?
+        .to_string_lossy();
+    let parent = target
+        .parent()
+        .ok_or_else(|| "target has no parent".to_string())?;
+    let tmp = parent.join(format!(".{file_name}.markcraft-{}.tmp", std::process::id()));
+
+    let result = std::fs::write(&tmp, content).and_then(|()| std::fs::rename(&tmp, target));
+    if let Err(e) = result {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("write failed: {e}"));
+    }
+    Ok(())
 }
 
 fn main() {
@@ -115,6 +135,27 @@ mod tests {
         let request = serde_json::json!({ "path": "relative/a.md", "content": "x" });
         let response = handle_request(request.to_string().as_bytes());
         assert_eq!(response["ok"], serde_json::json!(false));
+    }
+
+    #[test]
+    fn atomic_write_leaves_no_temp_files() {
+        let path = temp_markdown_path("atomic.md");
+        std::fs::write(&path, "old").unwrap();
+        let request = serde_json::json!({
+            "path": path.to_str().unwrap(),
+            "content": "atomic content"
+        });
+        let response = handle_request(request.to_string().as_bytes());
+        assert_eq!(response["ok"], serde_json::json!(true));
+        let dir = path.parent().unwrap();
+        let leftovers: Vec<_> = std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains(".markcraft-"))
+            .collect();
+        assert!(leftovers.is_empty(), "不应残留临时文件");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "atomic content");
+        std::fs::remove_file(&path).ok();
     }
 
     #[test]
