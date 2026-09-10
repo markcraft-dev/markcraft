@@ -1,4 +1,5 @@
 // MarkCraft DOM Enhancements: Code Block Copy & Image Actions
+import type { OutlineItem } from '@/shared/types'
 
 export function enhanceContentBlocks(
   container: HTMLElement,
@@ -101,4 +102,51 @@ export function enhanceContentBlocks(
       onOpenImageModal(img.src, img.alt || '')
     })
   })
+
+  // 3. Heading anchor links (GitHub 式悬停锚点，点击复制标题链接)
+  //    注意：锚点元素保持空文本，'#' 由 CSS ::before 渲染，
+  //    避免污染 heading.textContent（大纲/TOC/搜索的标题来源）
+  const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6')
+  headings.forEach((heading) => {
+    if (heading.querySelector('.mdr-heading-anchor')) return
+    const anchor = document.createElement('a')
+    anchor.className = 'mdr-heading-anchor'
+    anchor.title = '复制标题链接'
+    anchor.addEventListener('click', async (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!heading.id) return
+      try {
+        await navigator.clipboard.writeText(`${location.href.split('#')[0]}#${heading.id}`)
+        anchor.classList.add('mdr-anchor-copied')
+        setTimeout(() => {
+          anchor.classList.remove('mdr-anchor-copied')
+        }, 1200)
+      } catch {
+        // 剪贴板不可用时静默
+      }
+    })
+    heading.prepend(anchor)
+  })
+}
+
+/**
+ * [TOC] 占位容器填充：按大纲层级渲染目录（缩进式扁平结构）。
+ * 在大纲重建后调用；容器不存在（文档未使用 [TOC]）时为空操作。
+ */
+export function renderTocContainer(list: OutlineItem[]) {
+  const root = document.getElementById('mdr-toc')
+  if (!root) return
+  root.querySelectorAll('.mdr-toc-item').forEach((n) => n.remove())
+
+  const frag = document.createDocumentFragment()
+  for (const item of list) {
+    const a = document.createElement('a')
+    a.className = 'mdr-toc-item'
+    a.href = item.href
+    a.textContent = item.content
+    a.style.paddingLeft = `${14 + (item.level - 1) * 14}px`
+    frag.appendChild(a)
+  }
+  root.appendChild(frag)
 }

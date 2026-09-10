@@ -20,7 +20,7 @@
       <label class="block text-12px font-medium mb-6px text-[--text-secondary]">意境调色盘</label>
       <div class="grid grid-cols-3 gap-4px text-11px bg-[--bg-subtle] p-3px rounded-xl border border-[--border-subtle]">
         <button
-          v-for="mode in (['auto', 'light', 'sepia', 'dark', 'nordic'] as const)"
+          v-for="mode in (['auto', 'light', 'sepia', 'verdant', 'dark', 'nordic', 'dracula'] as const)"
           :key="mode"
           class="flex items-center justify-center gap-3px py-5px rounded-lg transition-all text-center cursor-pointer border-0 outline-none"
           :class="settings.pageTheme === mode ? 'bg-[--bg-page] text-[--primary-color] font-semibold shadow-xs' : 'bg-transparent text-[--text-secondary] hover:text-[--text-primary]'"
@@ -31,7 +31,7 @@
           <SvgIcon name="sun" v-else-if="mode === 'sepia'" class="w-3.5 h-3.5 text-amber-600" />
           <SvgIcon name="moon" v-else-if="mode === 'dark'" class="w-3.5 h-3.5 text-indigo-400" />
           <SvgIcon name="moon" v-else class="w-3.5 h-3.5 text-sky-400" />
-          <span>{{ mode === 'auto' ? '自动' : mode === 'light' ? '工作' : mode === 'sepia' ? '纸书' : mode === 'dark' ? '极夜' : '冷雾' }}</span>
+          <span>{{ mode === 'auto' ? '自动' : mode === 'light' ? '工作' : mode === 'sepia' ? '纸书' : mode === 'verdant' ? '护眼' : mode === 'dark' ? '极夜' : mode === 'nordic' ? '冷雾' : '魅夜' }}</span>
         </button>
       </div>
     </div>
@@ -84,7 +84,7 @@ function isPluginActive(p: string): boolean {
   return Array.isArray(settings.value?.mdPlugins) && settings.value.mdPlugins.includes(p)
 }
 
-function setTheme(theme: 'auto' | 'light' | 'dark' | 'sepia' | 'nordic') {
+function setTheme(theme: 'auto' | 'light' | 'sepia' | 'verdant' | 'dark' | 'nordic' | 'dracula') {
   settings.value.pageTheme = theme
   saveSettings({ pageTheme: theme })
 }

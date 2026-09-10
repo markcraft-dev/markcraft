@@ -93,30 +93,85 @@
 }
 
 :root[data-mdr-theme="nordic"] {
-  /* Nordic Theme (Nordic Slate / 深空冷雾) */
-  --bg-page: #0f141c;
-  --bg-sidebar: #141b26;
-  --bg-card: #1a2230;
-  --bg-subtle: #212c3d;
-  --bg-hover: #29374d;
-  --bg-active: #32435e;
-  --text-primary: #e6edf3;
-  --text-secondary: #9db0c6;
-  --text-muted: #62768f;
-  --border-color: rgba(140, 175, 220, 0.12);
-  --border-subtle: rgba(140, 175, 220, 0.06);
-  --primary-color: #60a5fa;
-  --primary-hover: #93c5fd;
-  --primary-light: rgba(96, 165, 250, 0.14);
-  --code-inline-bg: #212c3d;
-  --code-inline-color: #93c5fd;
-  --code-block-bg: #141b26;
-  --code-block-border: rgba(140, 175, 220, 0.12);
+  /* Nordic Theme (官方 Nord 配色: Polar Night + Frost / 北欧冷雾)
+     bg 基于 nord0 #2E3440 系, 主色 frost nord8 #88C0D0, 低饱和青灰 */
+  --bg-page: #272c36;
+  --bg-sidebar: #2e3440;
+  --bg-card: #353d4d;
+  --bg-subtle: #3b4252;
+  --bg-hover: #434c5e;
+  --bg-active: #4c566a;
+  --text-primary: #eceff4;
+  --text-secondary: #d8dee9;
+  --text-muted: #7b88a1;
+  --border-color: rgba(216, 222, 233, 0.12);
+  --border-subtle: rgba(216, 222, 233, 0.06);
+  --primary-color: #88c0d0;
+  --primary-hover: #8fbcbb;
+  --primary-light: rgba(136, 192, 208, 0.14);
+  --code-inline-bg: #3b4252;
+  --code-inline-color: #8fbcbb;
+  --code-block-bg: #272c36;
+  --code-block-border: rgba(216, 222, 233, 0.12);
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.45);
   --shadow-ambient: 0 4px 20px -2px rgba(0, 0, 0, 0.35);
   --shadow-elevated: 0 12px 32px -4px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-mdr-theme="dracula"] {
+  /* Dracula Theme (官方 Dracula 规格: bg #282A36, 紫 #BD93F9 / 妖紫魅夜) */
+  --bg-page: #282a36;
+  --bg-sidebar: #21222c;
+  --bg-card: #2f3141;
+  --bg-subtle: #343746;
+  --bg-hover: #3d4052;
+  --bg-active: #44475a;
+  --text-primary: #f8f8f2;
+  --text-secondary: #b7bdd4;
+  --text-muted: #6272a4;
+  --border-color: rgba(189, 147, 249, 0.14);
+  --border-subtle: rgba(189, 147, 249, 0.07);
+  --primary-color: #bd93f9;
+  --primary-hover: #d6acff;
+  --primary-light: rgba(189, 147, 249, 0.14);
+  --code-inline-bg: #44475a;
+  --code-inline-color: #ff79c6;
+  --code-block-bg: #21222c;
+  --code-block-border: rgba(189, 147, 249, 0.16);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-ambient: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+  --shadow-elevated: 0 12px 32px -4px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-mdr-theme="verdant"] {
+  /* Verdant Theme (经典豆沙绿护眼配色 / 豆沙护眼) */
+  --bg-page: #cce8cf;
+  --bg-sidebar: #c1e0c5;
+  --bg-card: #f7fbf7;
+  --bg-subtle: #d8ecda;
+  --bg-hover: #c9e2cc;
+  --bg-active: #bdd9c1;
+  --text-primary: #2f3b30;
+  --text-secondary: #4f5f51;
+  --text-muted: #86988a;
+  --border-color: rgba(47, 90, 52, 0.16);
+  --border-subtle: rgba(47, 90, 52, 0.08);
+  --primary-color: #3a7d44;
+  --primary-hover: #2f6b3a;
+  --primary-light: rgba(58, 125, 68, 0.12);
+  --code-inline-bg: #dcede0;
+  --code-inline-color: #2f5d36;
+  --code-block-bg: #eef6ef;
+  --code-block-border: rgba(47, 90, 52, 0.14);
+  --shadow-sm: 0 1px 2px 0 rgba(47, 90, 52, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(47, 90, 52, 0.08);
+  --shadow-lg: 0 10px 15px -3px rgba(47, 90, 52, 0.1);
+  --shadow-ambient: 0 4px 20px -2px rgba(47, 90, 52, 0.07);
+  --shadow-elevated: 0 12px 32px -4px rgba(47, 90, 52, 0.12);
 }
 
 *, *::before, *::after {
@@ -559,4 +614,205 @@ kbd.mdr-kbd {
   font-weight: 600;
   margin-bottom: 7px;
   font-size: 0.95em;
+}
+
+/* ==========================================================================
+   Heading Anchor Links (GitHub-style hover permalink)
+   ========================================================================== */
+
+.mdr-content .mdr-heading-anchor {
+  position: absolute;
+  left: -1.1em;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  text-decoration: none;
+  border: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  font-size: 0.85em;
+  padding: 0 0.2em;
+  cursor: pointer;
+}
+
+/* '#' 符号由 CSS 渲染，锚点元素保持空文本以免污染大纲/TOC/搜索标题 */
+.mdr-content .mdr-heading-anchor::before {
+  content: '#';
+}
+
+.mdr-content .mdr-heading-anchor.mdr-anchor-copied {
+  color: #10b981;
+}
+
+.mdr-content .mdr-heading-anchor.mdr-anchor-copied::before {
+  content: '✓';
+}
+
+.mdr-content h1:hover .mdr-heading-anchor,
+.mdr-content h2:hover .mdr-heading-anchor,
+.mdr-content h3:hover .mdr-heading-anchor,
+.mdr-content h4:hover .mdr-heading-anchor,
+.mdr-content h5:hover .mdr-heading-anchor,
+.mdr-content h6:hover .mdr-heading-anchor {
+  opacity: 1;
+}
+
+.mdr-content .mdr-heading-anchor:hover {
+  color: var(--primary-color);
+}
+
+/* ==========================================================================
+   [TOC] 文档目录（渲染后由大纲数据填充）
+   ========================================================================== */
+
+.mdr-toc {
+  margin: 1.6em 0;
+  padding: 16px 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background-color: var(--bg-subtle);
+  box-shadow: var(--shadow-sm);
+}
+
+.mdr-toc .mdr-toc-title {
+  font-weight: 600;
+  font-size: 0.95em;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.mdr-toc .mdr-toc-item {
+  display: block;
+  padding: 3px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border: none;
+  transition: color 0.12s ease;
+}
+
+.mdr-toc .mdr-toc-item:hover {
+  color: var(--primary-color);
+}
+
+/* ==========================================================================
+   Dark-theme code token overrides
+   (highlight.js/styles/github.css 只提供浅色令牌色，深色主题下
+    字符串等令牌不可读；此处统一覆盖为深色友好配色)
+   ========================================================================== */
+
+:root[data-mdr-theme="dark"] .mdr-content .hljs,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs {
+  color: #d5dae4;
+}
+
+:root[data-mdr-theme="dark"] .mdr-content .hljs-keyword,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-selector-tag,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-literal,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-section,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-doctag,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-name,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-strong,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-keyword,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-selector-tag,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-literal,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-section,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-doctag,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-name,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-strong,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-keyword,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-selector-tag,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-literal,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-section,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-doctag,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-name,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-strong {
+  color: #ff7b72;
+}
+
+:root[data-mdr-theme="dark"] .mdr-content .hljs-string,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-regexp,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-addition,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-attribute,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-meta .hljs-string,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-string,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-regexp,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-addition,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-attribute,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-meta .hljs-string,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-string,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-regexp,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-addition,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-attribute,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-meta .hljs-string {
+  color: #7ee2b8;
+}
+
+:root[data-mdr-theme="dark"] .mdr-content .hljs-number,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-variable,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-template-variable,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-selector-class,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-selector-attr,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-selector-pseudo,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-number,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-variable,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-template-variable,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-selector-class,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-selector-attr,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-selector-pseudo,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-number,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-variable,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-template-variable,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-selector-class,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-selector-attr,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-selector-pseudo {
+  color: #f2cc60;
+}
+
+:root[data-mdr-theme="dark"] .mdr-content .hljs-title,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-title.class_,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-title.function_,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-attr,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-built_in,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-symbol,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-bullet,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-link,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-title,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-title.class_,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-title.function_,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-attr,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-built_in,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-symbol,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-bullet,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-link,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-title,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-title.class_,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-title.function_,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-attr,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-built_in,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-symbol,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-bullet,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-link {
+  color: #79b8ff;
+}
+
+:root[data-mdr-theme="dark"] .mdr-content .hljs-comment,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-quote,
+:root[data-mdr-theme="dark"] .mdr-content .hljs-deletion,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-comment,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-quote,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-deletion,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-comment,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-quote,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-deletion {
+  color: #7d8590;
+  font-style: italic;
+}
+
+:root[data-mdr-theme="dark"] .mdr-content .hljs-meta,
+:root[data-mdr-theme="nordic"] .mdr-content .hljs-meta,
+:root[data-mdr-theme="dracula"] .mdr-content .hljs-meta {
+  color: #b392f0;
 }
