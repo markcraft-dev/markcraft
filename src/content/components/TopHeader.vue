@@ -55,8 +55,50 @@
       </button>
     </div>
 
-    <!-- Right Section: Tools Island -->
-    <div class="flex items-center gap-2px p-2px rounded-lg bg-[--bg-subtle]/50 border border-[--border-subtle] flex-shrink-0">
+    <!-- Right Section: Edit Actions Island (only in edit mode, lives in the header so it never covers content) + Tools Island -->
+    <div class="flex items-center gap-2px flex-shrink-0">
+      <!-- Edit Actions: save / finish / discard (replaces the old floating banner) -->
+      <div
+        v-if="isEditMode"
+        class="flex items-center gap-2px p-2px rounded-lg bg-[--bg-subtle]/50 border border-[--border-subtle] mr-2px"
+      >
+        <!-- Save -->
+        <button
+          class="edit-action-btn"
+          :class="isDirty
+            ? 'bg-[--primary-color] text-white hover:bg-[--primary-hover] shadow-xs font-semibold'
+            : 'text-[--text-muted] hover:text-[--text-primary] hover:bg-[--bg-hover] font-medium'"
+          :title="isDirty ? '保存至原文件 (Cmd+S)' : '无未保存修改 (Cmd+S)'"
+          @click="$emit('save')"
+        >
+          <SvgIcon name="save" class="w-3.5 h-3.5" />
+          <span>保存</span>
+          <kbd class="edit-kbd" :class="isDirty ? 'edit-kbd-on-primary' : ''">⌘S</kbd>
+        </button>
+
+        <!-- Finish editing -->
+        <button
+          class="edit-action-btn text-[--text-secondary] hover:text-[--text-primary] hover:bg-[--bg-hover] font-medium"
+          title="完成编辑并返回阅读视图 (Cmd+E)"
+          @click="$emit('finish-edit')"
+        >
+          <SvgIcon name="check" class="w-3.5 h-3.5" />
+          <span>完成</span>
+          <kbd class="edit-kbd">⌘E</kbd>
+        </button>
+
+        <!-- Discard changes -->
+        <button
+          class="edit-action-btn w-26px px-0 text-[--text-muted] hover:text-red-500 hover:bg-red-500/10"
+          title="放弃未保存的修改并重新载入"
+          @click="$emit('discard-edit')"
+        >
+          <SvgIcon name="rotate-ccw" class="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <!-- Tools Island -->
+      <div class="flex items-center gap-2px p-2px rounded-lg bg-[--bg-subtle]/50 border border-[--border-subtle] flex-shrink-0">
       <!-- Search Palette Button -->
       <IconButton
         title="搜索"
@@ -129,6 +171,7 @@
       >
         <SvgIcon name="sliders-horizontal" class="w-4 h-4" />
       </IconButton>
+      </div>
     </div>
 
     <!-- 2px Ambient Reading Progress Rail -->
@@ -165,6 +208,9 @@ defineEmits<{
   (e: 'open-settings'): void
   (e: 'open-search'): void
   (e: 'toggle-edit'): void
+  (e: 'save'): void
+  (e: 'finish-edit'): void
+  (e: 'discard-edit'): void
 }>()
 
 const isFullscreen = ref(false)
@@ -213,3 +259,36 @@ onUnmounted(() => {
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
 })
 </script>
+
+<style scoped>
+.edit-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  border: 0;
+  outline: none;
+  background: transparent;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+.edit-kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.16);
+  color: inherit;
+  opacity: 0.8;
+}
+.edit-kbd-on-primary {
+  background: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+  opacity: 1;
+}
+</style>
