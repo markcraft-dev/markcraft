@@ -9,6 +9,8 @@
           ? 'text-[--text-muted] opacity-40 cursor-not-allowed'
           : 'text-[--text-secondary] hover:text-[--text-primary] hover:bg-[--bg-hover]'
       ]"
+      :title="title || undefined"
+      :aria-label="title || undefined"
       :disabled="disabled"
       @click="$emit('click', $event)"
     >

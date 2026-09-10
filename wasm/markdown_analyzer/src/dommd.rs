@@ -67,6 +67,15 @@ pub fn dom_to_markdown(root: &DomNode) -> String {
     format!("{}\n", children_to_markdown(root).trim())
 }
 
+/// Mermaid 还原：源码来自 data-mermaid-source 属性，缺失时回退文本。
+fn mermaid_to_markdown(node: &DomNode) -> String {
+    let code = node
+        .attr("data-mermaid-source")
+        .map(str::to_string)
+        .unwrap_or_else(|| node.full_text());
+    format!("\n```mermaid\n{}\n```\n", code.trim())
+}
+
 fn children_to_markdown(node: &DomNode) -> String {
     let mut out = String::new();
     for child in &node.children {
@@ -115,11 +124,7 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode) -> String {
 
     // Mermaid 图：优先取 data-mermaid-source 属性
     if node.has_class("mermaid") || node.attr("data-mermaid").is_some() {
-        let code = node
-            .attr("data-mermaid-source")
-            .map(str::to_string)
-            .unwrap_or_else(|| node.full_text());
-        return format!("\n```mermaid\n{}\n```\n", code.trim());
+        return mermaid_to_markdown(node);
     }
 
     // GitHub Alerts：`> [!NOTE]` 等引用块
@@ -146,6 +151,14 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode) -> String {
 
     // 代码块
     if tag == "pre" {
+        // markdown-it 的 fence 渲染会把 mermaid 容器包进 <pre><code>，
+        // 此时优先还原 Mermaid 源码而不是取渲染后的 SVG 文本
+        let mermaid_inside = node.find_descendant(&|n| {
+            n.has_class("mermaid") || n.attr("data-mermaid").is_some()
+        });
+        if let Some(mermaid_div) = mermaid_inside {
+            return mermaid_to_markdown(mermaid_div);
+        }
         let code_el = node
             .find_descendant(&|n| n.tag == "code")
             .unwrap_or(node);
@@ -203,6 +216,16 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode) -> String {
     }
     if tag == "del" || tag == "s" || tag == "strike" {
         return format!("~~{}~~", children_to_markdown(node));
+    }
+    // 下标 / 上标 / 高亮（markdown-it-sub/sup/mark 语法）
+    if tag == "sub" {
+        return format!("~{}~", children_to_markdown(node));
+    }
+    if tag == "sup" {
+        return format!("^{}^", children_to_markdown(node));
+    }
+    if tag == "mark" {
+        return format!("=={}==", children_to_markdown(node));
     }
 
     // 链接与图片
@@ -288,7 +311,18 @@ fn serialize_table(table: &DomNode) -> String {
             }
             cells
                 .iter()
-                .map(|cell| cell.full_text().trim().replace('|', "\\|"))
+                .map(|cell| {
+                    // 单元格保留行内格式（code/strong/em 等），GFM 表格行内不允许换行，
+                    // 将块级转换产生的换行折叠为空格
+                    children_to_markdown(cell)
+                        .trim()
+                        .split('\n')
+                        .map(str::trim)
+                        .filter(|l| !l.is_empty())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                        .replace('|', "\\|")
+                })
                 .collect()
         })
         .collect();
@@ -551,6 +585,69 @@ mod tests {
             ],
         );
         assert_eq!(dom_to_markdown(&root), "---\n\n嵌套\n");
+    }
+
+    #[test]
+    fn recovers_mermaid_source_wrapped_in_pre_code() {
+        // markdown-it 会把 mermaid 容器包进 <pre><code class="language-mermaid">
+        let mermaid_div = element("div", vec![element("svg", vec![text("svg 内容")])])
+            .with_classes(&["mermaid"])
+            .with_attr("data-mermaid-source", "graph TD; A-->B;");
+        let root = element(
+            "article",
+            vec![element(
+                "pre",
+                vec![element("code", vec![mermaid_div]).with_classes(&["language-mermaid"])],
+            )],
+        );
+        assert_eq!(dom_to_markdown(&root), "```mermaid\ngraph TD; A-->B;\n```\n");
+    }
+
+    #[test]
+    fn serializes_sub_sup_and_mark() {
+        let root = element(
+            "article",
+            vec![element(
+                "p",
+                vec![
+                    text("H"),
+                    element("sub", vec![text("2")]),
+                    text("O 与 X"),
+                    element("sup", vec![text("2")]),
+                    text(" 与 "),
+                    element("mark", vec![text("高亮")]),
+                ],
+            )],
+        );
+        assert_eq!(dom_to_markdown(&root), "H~2~O 与 X^2^ 与 ==高亮==\n");
+    }
+
+    #[test]
+    fn preserves_inline_formatting_in_table_cells() {
+        let row = |cells: Vec<DomNode>| element("tr", cells);
+        let root = element(
+            "article",
+            vec![element(
+                "table",
+                vec![
+                    row(vec![
+                        element("th", vec![element("code", vec![text("name")])]),
+                        element("th", vec![text("desc")]),
+                    ]),
+                    row(vec![
+                        element("td", vec![element("code", vec![text("create_task")])]),
+                        element("td", vec![
+                            text("创建 "),
+                            element("strong", vec![text("任务")]),
+                        ]),
+                    ]),
+                ],
+            )],
+        );
+        assert_eq!(
+            dom_to_markdown(&root),
+            "| `name` | desc |\n| --- | --- |\n| `create_task` | 创建 **任务** |\n"
+        );
     }
 
     #[test]
