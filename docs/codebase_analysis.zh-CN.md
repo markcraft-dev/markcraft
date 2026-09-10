@@ -40,7 +40,7 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 | 文件 | 职责 | WASM 状态 |
 |---|---|---|
 | `src/content/index.ts` | 内容脚本入口。判断页面是否为 Markdown（后缀 + Content-Type + `<pre>` 启发式）或本地目录；挂载 Vue 应用到 `#mdr-root`。纯页面准入闸门，运行在 WASM 可用之前，保留 JS。 | 保留 JS（注入时序所限） |
-| `src/content/App.vue` | 主应用：状态中枢（主题/侧栏/编辑模式/脏标记），渲染管线 `updateMarkdown`（渲染 → 大纲 → 增强 → Mermaid），保存管线 `saveInPlace`（静默写盘 → showSaveFilePicker 授权兜底），全局快捷键、调色盘动作分发。 | `domToMarkdown`/`extractOutline` 改为 await WASM 版 |
+| `src/content/App.vue` | 主应用：状态中枢（主题/侧栏/编辑模式/脏标记），渲染管线 `updateMarkdown`（渲染 → 大纲 → 增强 → Mermaid），保存管线 `saveInPlace`（文件句柄 → 目录句柄静默覆盖 → 首次目录授权 → 单文件对话框兜底），全局快捷键、调色盘动作分发。 | `domToMarkdown`/`extractOutline` 改为 await WASM 版 |
 
 ### core/（核心逻辑层）
 
@@ -56,7 +56,7 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 | `core/doc-stats.ts` | 字数（去空白、UTF-16 口径对齐 JS `.length`）与阅读时长（400 字/分钟向上取整，最小 1），Rust `doc_stats`。 | ✅ WASM + 回退 |
 | `core/enhancements.ts` | DOM 增强：代码块包裹（macOS 圆点 + 语言标签 + 复制按钮）、图片点击灯箱。纯 DOM 操作。 | 保留 JS |
 | `core/export.ts` | 富文本复制（微信/知乎内联样式）、单文件 HTML 导出模板、Markdown 下载。 | 保留 JS |
-| `core/file-handle-storage.ts` | IndexedDB 持久化 `FileSystemFileHandle`，实现二次保存免授权静默写盘。 | 保留 JS（浏览器 API） |
+| `core/file-handle-storage.ts` | IndexedDB 持久化 `FileSystemFileHandle` 与 `FileSystemDirectoryHandle`：文件句柄与目录句柄双路静默保存；目录授权一次后按 URL 前缀最长匹配沿路径下钻覆盖（`create:false` 绝不新建），实现整目录免弹窗覆盖原文件。 | 保留 JS（浏览器 API） |
 | `core/theme.ts` | 主题（auto/light/sepia/dark/nordic）与字体/字号/宽度/自定义 CSS 应用。 | 保留 JS |
 
 ### components/（内容脚本 UI）

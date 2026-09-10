@@ -141,7 +141,7 @@ import { applyTheme, applyCustomStyles } from './core/theme'
 import { enhanceContentBlocks } from './core/enhancements'
 import { copyAsRichText, exportAsStandaloneHtml } from './core/export'
 import { domToMarkdown } from './core/dom-to-markdown'
-import { storeFileHandle, trySilentSave, writeToFileHandle } from './core/file-handle-storage'
+import { storeFileHandle, storeDirectoryHandle, trySilentSave, trySilentSaveViaDirectory, writeToFileHandle } from './core/file-handle-storage'
 import { useStorage } from '@/shared/storage'
 import type { OutlineItem, TreeNodeItem } from '@/shared/types'
 
@@ -262,20 +262,48 @@ async function saveInPlace(): Promise<boolean> {
   const fileUrl = currentActiveHref.value
   const fileName = decodeURIComponent(fileUrl.split('/').pop() || 'document.md')
 
-  // 1. Try silent save via cached / IndexedDB file handle
+  // 1. 静默保存：已授权的文件句柄优先，其次已授权目录句柄（覆盖原文件，绝不新建）
   try {
-    const silentSuccess = await trySilentSave(fileUrl, newMarkdown)
+    const silentSuccess = (await trySilentSave(fileUrl, newMarkdown)) || (await trySilentSaveViaDirectory(fileUrl, newMarkdown))
     if (silentSuccess) {
       rawMarkdownContent.value = newMarkdown
       isDirty.value = false
-      showToast('✓ 文件已直接静默保存至本地磁盘')
+      showToast('✓ 已直接静默覆盖保存至原文件')
       return true
     }
   } catch (e) {
     console.warn('Silent save check error:', e)
   }
 
-  // 2. If handle is not authorized yet, request authorization once via showSaveFilePicker
+  // 2. 首次授权：让用户选择文档所在文件夹（readwrite）。
+  //    目录句柄持久化后，该文件夹内所有文件均静默覆盖保存，不再弹任何对话框。
+  if ('showDirectoryPicker' in window) {
+    try {
+      const dirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite', id: 'markcraft-workspace' })
+      const dirUrl = fileUrl.substring(0, fileUrl.lastIndexOf('/') + 1) || fileUrl
+      // create:false：选中的文件夹里必须已存在同名文件，防止误存到错误位置
+      const fileHandle = await dirHandle.getFileHandle(fileName, { create: false })
+      const ok = await writeToFileHandle(fileHandle, newMarkdown)
+      if (ok) {
+        await storeDirectoryHandle(dirUrl, dirHandle)
+        await storeFileHandle(fileUrl, fileHandle)
+        await storeFileHandle(fileName, fileHandle)
+        rawMarkdownContent.value = newMarkdown
+        isDirty.value = false
+        showToast('✓ 已覆盖保存原文件；此文件夹后续将静默保存')
+        return true
+      }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        showToast('✕ 已取消保存')
+        return false
+      }
+      // 选错文件夹（不含当前文档）等情况 → 回退到单文件对话框
+      console.warn('Directory authorization fallback:', err)
+    }
+  }
+
+  // 3. 兜底：单文件另存对话框（文件名已预填）
   try {
     if ('showSaveFilePicker' in window) {
       const handle = await (window as any).showSaveFilePicker({
