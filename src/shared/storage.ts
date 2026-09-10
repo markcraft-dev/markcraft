@@ -2,7 +2,8 @@ import { ref } from 'vue'
 import { DEFAULT_SETTINGS } from './constants'
 import type { UserSettings } from './types'
 
-function normalizeSettings(raw: any): UserSettings {
+// 导出供 storage.onChanged 监听方在边界处归一化新值
+export function normalizeSettings(raw: any): UserSettings {
   const merged = { ...DEFAULT_SETTINGS, ...(raw || {}) }
 
   // Guarantee mdPlugins is always a valid Array

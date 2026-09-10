@@ -134,7 +134,7 @@ import { copyAsRichText, exportAsStandaloneHtml } from './core/export'
 import { domToMarkdown } from './core/dom-to-markdown'
 import { storeFileHandle, storeDirectoryHandle, trySilentSave, trySilentSaveViaDirectory, writeToFileHandle } from './core/file-handle-storage'
 import { tryNativeSave } from './core/native-save'
-import { useStorage } from '@/shared/storage'
+import { useStorage, normalizeSettings } from '@/shared/storage'
 import type { OutlineItem, TreeNodeItem } from '@/shared/types'
 
 const props = defineProps<{
@@ -207,7 +207,7 @@ const { settings, loadSettings } = useStorage()
 
 async function updateMarkdown(rawText: string) {
   rawMarkdownContent.value = rawText
-  renderedHtml.value = renderMarkdown(rawText)
+  renderedHtml.value = renderMarkdown(rawText, settings.value.mdPlugins)
   await nextTick()
 
   if (contentRef.value) {
@@ -485,6 +485,26 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   }
 }
 
+// 弹窗 / 设置页修改 chrome.storage.local 后广播到所有上下文，这里实时应用，
+// 免去手动刷新页面。主题/字体/宽度/自定义 CSS 为纯样式切换；插件集合变化需
+// 重渲染——编辑模式下跳过（避免冲掉未保存修改），退出编辑时会带新设置重渲染。
+function handleStorageChanges(changes: Record<string, chrome.storage.StorageChange>, area: string) {
+  if (area !== 'local' || !changes.settings) return
+  const next = normalizeSettings(changes.settings.newValue)
+  const pluginsChanged = JSON.stringify(next.mdPlugins) !== JSON.stringify(settings.value.mdPlugins)
+  settings.value = next
+  applyTheme(next.pageTheme)
+  applyCustomStyles(
+    next.enableCustomCSS ? next.customCSS : undefined,
+    next.enableCustomContentWidth ? next.customContentWidth : undefined,
+    next.textFont,
+    next.textSize
+  )
+  if (pluginsChanged && !isEditMode.value) {
+    void updateMarkdown(rawMarkdownContent.value)
+  }
+}
+
 onMounted(async () => {
   window.addEventListener('keydown', handleGlobalKeydown)
   window.addEventListener('scroll', updateReadingProgress, { passive: true })
@@ -505,6 +525,10 @@ onMounted(async () => {
     rightSideOpen.value = false
   }
 
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener(handleStorageChanges)
+  }
+
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'command') {
       if (msg.command === 'toggleSide') leftSideOpen.value = !leftSideOpen.value
@@ -516,6 +540,9 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
   window.removeEventListener('scroll', updateReadingProgress)
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.removeListener(handleStorageChanges)
+  }
 })
 </script>
 

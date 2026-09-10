@@ -15,14 +15,24 @@ import footnotePlugin from 'markdown-it-footnote'
 import mermaid from 'mermaid'
 
 let mdInstance: MarkdownIt | null = null
+// 当前实例对应的插件签名；设置变化时按需重建渲染器
+let activeSignature = ''
+// Mermaid 经 highlight 钩子渲染，需在钩子内感知开关状态
+let mermaidEnabled = true
 
 export function initMarkdownRenderer(activePlugins: string[] = [], pluginOptions: Record<string, any> = {}): MarkdownIt {
+  // 空集合视为「全部启用」，保持向后兼容
+  const enabled = new Set(activePlugins)
+  const isEnabled = (name: string) => enabled.size === 0 || enabled.has(name)
+  mermaidEnabled = isEnabled('Mermaid')
+
   const md = new MarkdownIt({
     html: true,
-    linkify: true,
+    // Linkify 开关
+    linkify: isEnabled('Linkify'),
     typographer: true,
     highlight: (str, lang) => {
-      if (lang && lang.toLowerCase() === 'mermaid') {
+      if (lang && mermaidEnabled && lang.toLowerCase() === 'mermaid') {
         return `<div class="mermaid">${md.utils.escapeHtml(str)}</div>`
       }
       if (lang && hljs.getLanguage(lang)) {
@@ -34,32 +44,43 @@ export function initMarkdownRenderer(activePlugins: string[] = [], pluginOptions
     }
   })
 
-  // Register core & extension plugins
-  md.use(emojiPlugin)
-  md.use(subPlugin)
-  md.use(supPlugin)
-  md.use(insPlugin)
-  md.use(markPlugin)
+  // 按设置注册扩展插件（TOC / FrontMatter 暂无实现，保持无操作）
+  if (isEnabled('Emoji')) md.use(emojiPlugin)
+  if (isEnabled('Sub')) md.use(subPlugin)
+  if (isEnabled('Sup')) md.use(supPlugin)
+  if (isEnabled('Ins')) md.use(insPlugin)
+  if (isEnabled('Mark')) md.use(markPlugin)
   md.use(deflistPlugin)
   md.use(abbrPlugin)
   md.use(footnotePlugin)
-  md.use(taskListsPlugin, { enabled: true, label: true, labelAfter: true })
-  md.use(multimdTablePlugin, { multiline: true, rowspan: true, headerless: true })
-  md.use(alertPlugin)
-  md.use(katexPlugin, { throwOnError: false, errorColor: '#cc0000' })
+  if (isEnabled('TaskLists')) md.use(taskListsPlugin, { enabled: true, label: true, labelAfter: true })
+  if (isEnabled('MultimdTable')) md.use(multimdTablePlugin, { multiline: true, rowspan: true, headerless: true })
+  if (isEnabled('Alert')) md.use(alertPlugin)
+  if (isEnabled('Katex')) md.use(katexPlugin, { throwOnError: false, errorColor: '#cc0000' })
 
   mdInstance = md
   return md
 }
 
-export function renderMarkdown(rawText: string): string {
-  if (!mdInstance) {
-    initMarkdownRenderer()
+export function renderMarkdown(rawText: string, activePlugins?: string[]): string {
+  if (!activePlugins) {
+    // 未指定插件集合：沿用现有实例（首调用时以全启用初始化）
+    if (!mdInstance) {
+      initMarkdownRenderer()
+    }
+    return mdInstance!.render(rawText)
+  }
+
+  const signature = [...activePlugins].sort().join(',')
+  if (!mdInstance || signature !== activeSignature) {
+    initMarkdownRenderer(activePlugins)
+    activeSignature = signature
   }
   return mdInstance!.render(rawText)
 }
 
 export async function renderMermaidDiagrams() {
+  if (!mermaidEnabled) return
   try {
     mermaid.initialize({
       startOnLoad: false,
