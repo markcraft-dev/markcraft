@@ -129,7 +129,7 @@ import ImageLightbox from './components/ImageLightbox.vue'
 import { renderMarkdown, renderMermaidDiagrams } from './core/markdown'
 import { extractOutline } from './core/outline'
 import { applyTheme, applyCustomStyles } from './core/theme'
-import { enhanceContentBlocks } from './core/enhancements'
+import { enhanceContentBlocks, renderTocContainer } from './core/enhancements'
 import { copyAsRichText, exportAsStandaloneHtml } from './core/export'
 import { domToMarkdown } from './core/dom-to-markdown'
 import { storeFileHandle, storeDirectoryHandle, trySilentSave, trySilentSaveViaDirectory, writeToFileHandle } from './core/file-handle-storage'
@@ -254,6 +254,7 @@ async function refreshOutline() {
   const result = await extractOutline(contentRef.value, settings.value.maxOutlineExpandLevel)
   if (seq === outlineSeq) {
     outlineData.value = result
+    renderTocContainer(result.list)
   }
 }
 
@@ -384,12 +385,14 @@ function cancelInPlaceEdit() {
 }
 
 function toggleTheme() {
-  const sequence: Array<'auto' | 'light' | 'sepia' | 'dark' | 'nordic'> = [
+  const sequence: Array<'auto' | 'light' | 'sepia' | 'verdant' | 'dark' | 'nordic' | 'dracula'> = [
     'auto',
     'light',
     'sepia',
+    'verdant',
     'dark',
-    'nordic'
+    'nordic',
+    'dracula'
   ]
   const curIdx = sequence.indexOf(currentTheme.value)
   const next = sequence[(curIdx + 1) % sequence.length]

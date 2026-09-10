@@ -147,7 +147,9 @@
         <SvgIcon name="sun" v-if="theme === 'light'" class="w-4 h-4 text-amber-500" />
         <SvgIcon name="sun" v-else-if="theme === 'sepia'" class="w-4 h-4 text-amber-600" />
         <SvgIcon name="moon" v-else-if="theme === 'dark'" class="w-4 h-4 text-indigo-400" />
+        <SvgIcon name="sun" v-else-if="theme === 'verdant'" class="w-4 h-4 text-emerald-500" />
         <SvgIcon name="moon" v-else-if="theme === 'nordic'" class="w-4 h-4 text-sky-400" />
+        <SvgIcon name="moon" v-else-if="theme === 'dracula'" class="w-4 h-4 text-purple-400" />
         <SvgIcon name="device-auto" v-else class="w-4 h-4" />
       </IconButton>
 
@@ -190,7 +192,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import IconButton from '@/components/IconButton.vue'
 
 const props = defineProps<{
-  theme: 'auto' | 'light' | 'dark' | 'sepia' | 'nordic'
+  theme: 'auto' | 'light' | 'sepia' | 'verdant' | 'dark' | 'nordic' | 'dracula'
   leftOpen: boolean
   rightOpen: boolean
   isLocal: boolean
@@ -219,7 +221,9 @@ const themeTitle = computed(() => {
   if (props.theme === 'light') return '当前: 明亮模式 (点击切换羊皮纸)'
   if (props.theme === 'sepia') return '当前: 羊皮纸模式 (点击切换暗黑)'
   if (props.theme === 'dark') return '当前: 暗黑极夜 (点击切换北欧冷雾)'
-  if (props.theme === 'nordic') return '当前: 北欧冷雾 (点击切换跟随系统)'
+  if (props.theme === 'verdant') return '当前: 豆沙护眼 (点击切换深空极夜)'
+  if (props.theme === 'nordic') return '当前: 北欧冷雾 (点击切换妖紫魅夜)'
+  if (props.theme === 'dracula') return '当前: 妖紫魅夜 (点击切换跟随系统)'
   return '当前: 跟随系统 (点击切换明亮)'
 })
 

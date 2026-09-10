@@ -20,6 +20,25 @@ let activeSignature = ''
 // Mermaid 经 highlight 钩子渲染，需在钩子内感知开关状态
 let mermaidEnabled = true
 
+// [TOC] 独占段落 → 渲染占位容器（App 随后用大纲数据填充条目）
+function tocPlugin(md: MarkdownIt): void {
+  md.core.ruler.push('mdr_toc_placeholder', (state) => {
+    for (let i = state.tokens.length - 2; i >= 0; i--) {
+      const token = state.tokens[i]
+      if (
+        token.type === 'paragraph_open' &&
+        state.tokens[i + 1].type === 'inline' &&
+        /^\[toc\]$/i.test(state.tokens[i + 1].content.trim())
+      ) {
+        const html = new state.Token('html_block', '', 0)
+        html.content =
+          '<div class="mdr-toc" id="mdr-toc"><div class="mdr-toc-title">目录</div></div>'
+        state.tokens.splice(i, 3, html)
+      }
+    }
+  })
+}
+
 export function initMarkdownRenderer(activePlugins: string[] = [], pluginOptions: Record<string, any> = {}): MarkdownIt {
   // 空集合视为「全部启用」，保持向后兼容
   const enabled = new Set(activePlugins)
@@ -58,6 +77,7 @@ export function initMarkdownRenderer(activePlugins: string[] = [], pluginOptions
   if (isEnabled('MultimdTable')) md.use(multimdTablePlugin, { multiline: true, rowspan: true, headerless: true })
   if (isEnabled('Alert')) md.use(alertPlugin)
   if (isEnabled('Katex')) md.use(katexPlugin, { throwOnError: false, errorColor: '#cc0000' })
+  if (isEnabled('TOC')) md.use(tocPlugin)
 
   mdInstance = md
   return md

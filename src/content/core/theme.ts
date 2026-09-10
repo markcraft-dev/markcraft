@@ -1,4 +1,6 @@
-export function applyTheme(theme: 'auto' | 'light' | 'dark' | 'sepia' | 'nordic') {
+export type PageTheme = 'auto' | 'light' | 'sepia' | 'verdant' | 'dark' | 'nordic' | 'dracula'
+
+export function applyTheme(theme: PageTheme) {
   let effectiveTheme = theme
   if (theme === 'auto') {
     const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches

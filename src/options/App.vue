@@ -91,7 +91,9 @@ const themeSelectOptions: SelectOption[] = [
   { value: 'light', label: '极简工作室', subLabel: 'Zinc' },
   { value: 'sepia', label: '温润羊皮纸', subLabel: 'Paper' },
   { value: 'dark', label: '深空极夜', subLabel: 'Indigo' },
-  { value: 'nordic', label: '北欧冷雾', subLabel: 'Slate' }
+  { value: 'verdant', label: '豆沙护眼', subLabel: 'Verdant' },
+  { value: 'nordic', label: '北欧冷雾', subLabel: 'Nord' },
+  { value: 'dracula', label: '妖紫魅夜', subLabel: 'Dracula' }
 ]
 
 const fontSelectOptions: SelectOption[] = [

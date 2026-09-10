@@ -234,7 +234,7 @@ const sizeOptions: SelectOption[] = [
 ]
 
 interface ThemeOption {
-  id: 'auto' | 'light' | 'sepia' | 'dark' | 'nordic'
+  id: 'auto' | 'light' | 'sepia' | 'verdant' | 'dark' | 'nordic' | 'dracula'
   label: string
   desc: string
   icon: string
@@ -290,20 +290,53 @@ const themeOptions: ThemeOption[] = [
     previewText: '#f1f5f9'
   },
   {
+    id: 'verdant',
+    label: '豆沙护眼',
+    desc: '经典豆沙绿长时间阅读',
+    icon: 'sun',
+    iconColor: 'text-emerald-500',
+    previewBg: '#cce8cf',
+    previewBorder: 'rgba(47, 90, 52, 0.2)',
+    previewPrimary: '#3a7d44',
+    previewText: '#2f3b30'
+  },
+  {
+    id: 'dark',
+    label: '深空极夜',
+    desc: '宇宙靛蓝沉浸夜览',
+    icon: 'moon',
+    iconColor: 'text-indigo-400',
+    previewBg: '#0b0f17',
+    previewBorder: 'rgba(255, 255, 255, 0.12)',
+    previewPrimary: '#60a5fa',
+    previewText: '#f1f5f9'
+  },
+  {
     id: 'nordic',
     label: '北欧冷雾',
-    desc: '莫兰迪雾蓝灰极客',
+    desc: 'Nord 官方霜蓝低饱和',
     icon: 'moon',
     iconColor: 'text-sky-400',
-    previewBg: '#0f141c',
-    previewBorder: 'rgba(140, 175, 220, 0.15)',
-    previewPrimary: '#60a5fa',
-    previewText: '#e6edf3'
+    previewBg: '#2e3440',
+    previewBorder: 'rgba(136, 192, 208, 0.25)',
+    previewPrimary: '#88c0d0',
+    previewText: '#eceff4'
+  },
+  {
+    id: 'dracula',
+    label: '妖紫魅夜',
+    desc: 'Dracula 紫夜高对比',
+    icon: 'moon',
+    iconColor: 'text-purple-400',
+    previewBg: '#282a36',
+    previewBorder: 'rgba(189, 147, 249, 0.3)',
+    previewPrimary: '#bd93f9',
+    previewText: '#f8f8f2'
   }
 ]
 
 const props = defineProps<{ visible: boolean }>()
-const emit = defineEmits<{ (e: 'close'): void; (e: 'theme-changed', theme: 'auto' | 'light' | 'dark' | 'sepia' | 'nordic'): void }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'theme-changed', theme: 'auto' | 'light' | 'sepia' | 'verdant' | 'dark' | 'nordic' | 'dracula'): void }>()
 
 const { settings, loadSettings, saveSettings } = useStorage()
 const contentWidthValue = ref(900)
@@ -324,7 +357,7 @@ function pluginLabel(p: string): string {
   return map[p] || p
 }
 
-function setTheme(theme: 'auto' | 'light' | 'dark' | 'sepia' | 'nordic') {
+function setTheme(theme: 'auto' | 'light' | 'sepia' | 'verdant' | 'dark' | 'nordic' | 'dracula') {
   settings.value.pageTheme = theme
   saveSettings({ pageTheme: theme })
   applyTheme(theme)
