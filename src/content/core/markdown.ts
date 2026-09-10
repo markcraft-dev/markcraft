@@ -33,7 +33,8 @@ export function initMarkdownRenderer(activePlugins: string[] = [], pluginOptions
     typographer: true,
     highlight: (str, lang) => {
       if (lang && mermaidEnabled && lang.toLowerCase() === 'mermaid') {
-        return `<div class="mermaid">${md.utils.escapeHtml(str)}</div>`
+        // 源码写入 data-mermaid-source，供 WASM 版 dom_to_markdown 还原 Mermaid 代码块
+        return `<div class="mermaid" data-mermaid-source="${md.utils.escapeHtml(str)}">${md.utils.escapeHtml(str)}</div>`
       }
       if (lang && hljs.getLanguage(lang)) {
         try {

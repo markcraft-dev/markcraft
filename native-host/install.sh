@@ -48,20 +48,29 @@ echo "==> 扩展 ID: $EXT_ID"
 
 case "$(uname -s)" in
   Darwin)
-    MANIFEST_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+    # 正式版 Chrome / Chrome for Testing / Chromium 各有独立清单目录，全部覆盖
+    MANIFEST_DIRS=(
+      "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+      "$HOME/Library/Application Support/Google/Chrome for Testing/NativeMessagingHosts"
+      "$HOME/Library/Application Support/Chromium/NativeMessagingHosts"
+    )
     ;;
   Linux)
-    MANIFEST_DIR="$HOME/.config/google-chrome/NativeMessagingHosts"
+    MANIFEST_DIRS=(
+      "$HOME/.config/google-chrome/NativeMessagingHosts"
+      "$HOME/.config/google-chrome-for-testing/NativeMessagingHosts"
+      "$HOME/.config/chromium/NativeMessagingHosts"
+    )
     ;;
   *)
     echo "暂不支持的平台: $(uname -s)（Windows 需写注册表，见 README）" >&2
     exit 1
     ;;
 esac
-mkdir -p "$MANIFEST_DIR"
-MANIFEST_PATH="$MANIFEST_DIR/$HOST_NAME.json"
-
-cat > "$MANIFEST_PATH" <<EOF
+for MANIFEST_DIR in "${MANIFEST_DIRS[@]}"; do
+  mkdir -p "$MANIFEST_DIR"
+  MANIFEST_PATH="$MANIFEST_DIR/$HOST_NAME.json"
+  cat > "$MANIFEST_PATH" <<EOF
 {
   "name": "$HOST_NAME",
   "description": "MarkCraft in-place Markdown file writer",
@@ -70,9 +79,8 @@ cat > "$MANIFEST_PATH" <<EOF
   "allowed_origins": ["chrome-extension://$EXT_ID/"]
 }
 EOF
-
-echo "==> 已写入宿主清单: $MANIFEST_PATH"
-cat "$MANIFEST_PATH"
+  echo "==> 已写入宿主清单: $MANIFEST_PATH"
+done
 echo ""
 echo "完成！请在 chrome://extensions 中重新加载 MarkCraft 扩展，之后保存将直接覆盖原文件（零弹窗）。"
-echo "卸载：删除 $MANIFEST_PATH 即可。"
+echo "卸载：删除以上各 NativeMessagingHosts 目录中的 com.markcraft.filewriter.json 即可。"

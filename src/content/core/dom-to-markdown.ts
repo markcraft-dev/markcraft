@@ -16,7 +16,9 @@ interface SerializedNode {
 }
 
 // MarkCraft 注入的 UI 辅助元素，序列化时整体剔除
-const UI_HELPER_SELECTOR = '.mdr-code-copy-btn, .mdr-image-wrapper button, .mdr-in-place-toolbar'
+// （.mdr-code-header 的语言标签文本不应混入保存结果）
+const UI_HELPER_SELECTOR =
+  '.mdr-code-copy-btn, .mdr-image-wrapper button, .mdr-in-place-toolbar, .mdr-code-header'
 
 /**
  * 通用 DOM 快照：仅采集标签、类名、属性、文本与复选框状态，
