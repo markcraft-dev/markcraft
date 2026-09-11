@@ -39,14 +39,16 @@ export function getParentFolderURL(currentUrl?: string): string {
  */
 export function getAncestorFolderURLs(rootUrl: string, targetFileUrl: string): string[] {
   const ancestors: string[] = []
-  if (!targetFileUrl.startsWith(rootUrl)) return ancestors
+  // 前缀判断使用补齐尾斜杠后的根 URL，避免 /root 误匹配 /root2 下的文件
+  const root = rootUrl.endsWith('/') ? rootUrl : `${rootUrl}/`
+  if (!targetFileUrl.startsWith(root)) return ancestors
 
-  const relative = targetFileUrl.substring(rootUrl.length)
+  const relative = targetFileUrl.substring(root.length)
   const segments = relative.split('/').filter(Boolean)
   // Remove last segment (filename)
   segments.pop()
 
-  let current = rootUrl.endsWith('/') ? rootUrl : `${rootUrl}/`
+  let current = root
   for (const seg of segments) {
     current = `${current}${seg}/`
     ancestors.push(current)

@@ -8,16 +8,21 @@ interface HeadingSnapshot {
 
 const INVALID_CHARS = /[^\p{L}\p{M}\p{Nd}\p{Nl}\p{Pc}\- ]/gu
 
-/** JS 回退实现：与 WASM 版 slug 规则一致。 */
-function generateSlug(text: string, counters: Record<string, number>): string {
+/** JS 回退实现：与 WASM 版 slug 规则一致（已用集合 + 递增后缀，保证全局唯一）。 */
+function generateSlug(text: string, used: Set<string>): string {
   const base = encodeURIComponent(
     text.toLowerCase().replace(/ /g, '-').replace(INVALID_CHARS, '').trim()
   )
-  if (base in counters) {
-    return `${base}-${counters[base]++}`
+  if (!used.has(base)) {
+    used.add(base)
+    return base
   }
-  counters[base] = 1
-  return base
+  // 只按基名计数会让 a, a, a-1 序列产出重复的 #a-1；已用集合 + 递增直到未占用
+  let n = 1
+  while (used.has(`${base}-${n}`)) n += 1
+  const slug = `${base}-${n}`
+  used.add(slug)
+  return slug
 }
 
 function buildOutlineFallback(
@@ -27,11 +32,11 @@ function buildOutlineFallback(
   const flatResult: OutlineItem[] = []
   const treeResult: OutlineItem[] = []
   const stack: OutlineItem[] = []
-  const counters: Record<string, number> = {}
+  const usedSlugs: Set<string> = new Set()
 
   headings.forEach((heading, idx) => {
     const text = (heading.textContent || '').trim()
-    const slug = generateSlug(text, counters)
+    const slug = generateSlug(text, usedSlugs)
 
     const level = Number.parseInt(heading.tagName.slice(1), 10)
     const item: OutlineItem = {

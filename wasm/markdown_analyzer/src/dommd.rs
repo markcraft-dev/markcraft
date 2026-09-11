@@ -64,7 +64,27 @@ impl DomNode {
 
 /// 入口：根元素的子节点逐一转换后整体 trim 并补一个换行（与 JS 版一致）。
 pub fn dom_to_markdown(root: &DomNode) -> String {
-    format!("{}\n", children_to_markdown(root).trim())
+    format!("{}\n", children_to_markdown(root, 0, false).trim())
+}
+
+/// 内容中最长连续反引号串的长度（用于选择不会提前闭合的围栏）。
+fn longest_backtick_run(content: &str) -> usize {
+    let mut max = 0usize;
+    let mut current = 0usize;
+    for ch in content.chars() {
+        if ch == '`' {
+            current += 1;
+            max = max.max(current);
+        } else {
+            current = 0;
+        }
+    }
+    max
+}
+
+/// 围栏长度取 `min_len` 与「最长反引号串 + 1」的较大者，避免内容把围栏提前闭合。
+fn fence(run: usize, min_len: usize) -> String {
+    "`".repeat(run.max(min_len))
 }
 
 /// Mermaid 还原：源码来自 data-mermaid-source 属性，缺失时回退文本。
@@ -73,19 +93,21 @@ fn mermaid_to_markdown(node: &DomNode) -> String {
         .attr("data-mermaid-source")
         .map(str::to_string)
         .unwrap_or_else(|| node.full_text());
-    format!("\n```mermaid\n{}\n```\n", code.trim())
+    let code = code.trim().to_string();
+    let fence = fence(longest_backtick_run(&code) + 1, 3);
+    format!("\n{fence}mermaid\n{code}\n{fence}\n")
 }
 
-fn children_to_markdown(node: &DomNode) -> String {
+fn children_to_markdown(node: &DomNode, depth: usize, inside_table: bool) -> String {
     let mut out = String::new();
     for child in &node.children {
-        out.push_str(&node_to_markdown(child, node));
+        out.push_str(&node_to_markdown(child, node, depth, inside_table));
     }
     out
 }
 
 /// 排除首个 `markdown-alert-title` 子元素后的内容（对应 JS 版的 `titleEl.remove()`）。
-fn alert_inner_to_markdown(node: &DomNode) -> String {
+fn alert_inner_to_markdown(node: &DomNode, depth: usize, inside_table: bool) -> String {
     let mut title_skipped = false;
     let mut out = String::new();
     for child in &node.children {
@@ -93,12 +115,12 @@ fn alert_inner_to_markdown(node: &DomNode) -> String {
             title_skipped = true;
             continue;
         }
-        out.push_str(&node_to_markdown(child, node));
+        out.push_str(&node_to_markdown(child, node, depth, inside_table));
     }
     out
 }
 
-fn node_to_markdown(node: &DomNode, parent: &DomNode) -> String {
+fn node_to_markdown(node: &DomNode, parent: &DomNode, depth: usize, inside_table: bool) -> String {
     if let Some(text) = &node.text {
         return text.clone();
     }
@@ -140,7 +162,7 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode) -> String {
         } else {
             "NOTE"
         };
-        let inner = alert_inner_to_markdown(node).trim().to_string();
+        let inner = alert_inner_to_markdown(node, depth, inside_table).trim().to_string();
         let lines = inner
             .split('\n')
             .map(|line| format!("> {line}"))
@@ -168,16 +190,23 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode) -> String {
             .find_map(|c| c.strip_prefix("language-"))
             .unwrap_or("");
         let raw_code = code_el.full_text();
-        return format!(
-            "\n```{}\n{}\n```\n",
-            lang,
-            raw_code.trim_end_matches('\n')
-        );
+        let trimmed = raw_code.trim_end_matches('\n');
+        // 内容含 ``` 时三反引号围栏会被提前闭合，按内容选择更长的围栏
+        let fence = fence(longest_backtick_run(trimmed) + 1, 3);
+        return format!("\n{fence}{lang}\n{trimmed}\n{fence}\n");
     }
 
     // 行内代码（父元素不是 pre）
     if tag == "code" && parent.tag != "pre" {
-        return format!("`{}`", node.full_text());
+        let content = node.full_text();
+        let fence = fence(longest_backtick_run(&content) + 1, 1);
+        // 内容以反引号开头/结尾（或为空）时按 CommonMark 用空格与围栏分隔
+        let pad = if content.is_empty() || content.starts_with('`') || content.ends_with('`') {
+            " "
+        } else {
+            ""
+        };
+        return format!("{fence}{pad}{content}{pad}{fence}");
     }
 
     // 标题
@@ -188,17 +217,17 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode) -> String {
     {
         let level = tag.as_bytes()[1] - b'0';
         let prefix = "#".repeat(level as usize);
-        return format!("\n{prefix} {}\n", children_to_markdown(node).trim());
+        return format!("\n{prefix} {}\n", children_to_markdown(node, depth, inside_table).trim());
     }
 
     // 段落
     if tag == "p" {
-        return format!("\n{}\n", children_to_markdown(node).trim());
+        return format!("\n{}\n", children_to_markdown(node, depth, inside_table).trim());
     }
 
     // 引用块
     if tag == "blockquote" {
-        let inner = children_to_markdown(node).trim().to_string();
+        let inner = children_to_markdown(node, depth, inside_table).trim().to_string();
         let lines = inner
             .split('\n')
             .map(|line| format!("> {line}"))
@@ -209,29 +238,29 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode) -> String {
 
     // 加粗 / 斜体 / 删除线
     if tag == "strong" || tag == "b" {
-        return format!("**{}**", children_to_markdown(node));
+        return format!("**{}**", children_to_markdown(node, depth, inside_table));
     }
     if tag == "em" || tag == "i" {
-        return format!("*{}*", children_to_markdown(node));
+        return format!("*{}*", children_to_markdown(node, depth, inside_table));
     }
     if tag == "del" || tag == "s" || tag == "strike" {
-        return format!("~~{}~~", children_to_markdown(node));
+        return format!("~~{}~~", children_to_markdown(node, depth, inside_table));
     }
     // 下标 / 上标 / 高亮（markdown-it-sub/sup/mark 语法）
     if tag == "sub" {
-        return format!("~{}~", children_to_markdown(node));
+        return format!("~{}~", children_to_markdown(node, depth, inside_table));
     }
     if tag == "sup" {
-        return format!("^{}^", children_to_markdown(node));
+        return format!("^{}^", children_to_markdown(node, depth, inside_table));
     }
     if tag == "mark" {
-        return format!("=={}==", children_to_markdown(node));
+        return format!("=={}==", children_to_markdown(node, depth, inside_table));
     }
 
     // 链接与图片
     if tag == "a" {
         let href = node.attr("href").unwrap_or("");
-        return format!("[{}]({})", children_to_markdown(node), href);
+        return format!("[{}]({})", children_to_markdown(node, depth, inside_table), href);
     }
     if tag == "img" {
         let src = node.attr("src").unwrap_or("");
@@ -239,41 +268,49 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode) -> String {
         return format!("![{alt}]({src})");
     }
 
-    // 无序 / 任务列表
-    if tag == "ul" {
-        let items: Vec<String> = node
-            .children
-            .iter()
-            .filter(|c| c.tag == "li")
-            .map(|li| {
-                let task = li.find_descendant(&|n| {
-                    n.tag == "input" && n.attr("type") == Some("checkbox")
-                });
-                match task {
-                    Some(input) => {
-                        let checked = input.attr("checked") == Some("true");
-                        format!(
-                            "- [{}] {}",
-                            if checked { "x" } else { " " },
-                            li.full_text().trim()
-                        )
-                    }
-                    None => format!("- {}", children_to_markdown(li).trim()),
-                }
-            })
-            .collect();
-        return format!("\n{}\n", items.join("\n"));
-    }
-
-    // 有序列表
-    if tag == "ol" {
+    // 无序 / 有序 / 任务列表：任务项同样按子节点序列化（保留行内格式与嵌套结构），
+    // 嵌套内容按标记宽度缩进，保证往返后层级语义不变
+    if tag == "ul" || tag == "ol" {
+        let start = if tag == "ol" {
+            node.attr("start")
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(1)
+        } else {
+            1
+        };
         let items: Vec<String> = node
             .children
             .iter()
             .filter(|c| c.tag == "li")
             .enumerate()
             .map(|(idx, li)| {
-                format!("{}. {}", idx + 1, children_to_markdown(li).trim())
+                let task = li.find_descendant(&|n| {
+                    n.tag == "input" && n.attr("type") == Some("checkbox")
+                });
+                let marker = match task {
+                    Some(input) => format!(
+                        "- [{}] ",
+                        if input.attr("checked") == Some("true") { "x" } else { " " }
+                    ),
+                    None if tag == "ol" => format!("{}. ", start + idx),
+                    None => "- ".to_string(),
+                };
+                let inner = children_to_markdown(li, depth + 1, inside_table).trim().to_string();
+                let pad = " ".repeat(marker.len());
+                // 首行紧跟标记无需缩进，续行（嵌套列表等）按标记宽度缩进保持层级
+                let indented = inner
+                    .split('\n')
+                    .enumerate()
+                    .map(|(i, line)| {
+                        if i == 0 || line.is_empty() {
+                            line.to_string()
+                        } else {
+                            format!("{pad}{line}")
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                format!("{marker}{indented}")
             })
             .collect();
         return format!("\n{}\n", items.join("\n"));
@@ -281,6 +318,11 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode) -> String {
 
     // 表格
     if tag == "table" {
+        if inside_table {
+            // 嵌套表格降级为纯文本：GFM 单元格内无法承载块级表格，
+            // 递归序列化会把内层行/分隔行混入外层，破坏列结构
+            return node.full_text();
+        }
         return format!("\n{}\n", serialize_table(node));
     }
 
@@ -292,12 +334,12 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode) -> String {
         return "\n".to_string();
     }
 
-    children_to_markdown(node)
+    children_to_markdown(node, depth, inside_table)
 }
 
 fn serialize_table(table: &DomNode) -> String {
     let mut rows: Vec<&DomNode> = Vec::new();
-    collect_tag_descendants(table, "tr", &mut rows);
+    collect_direct_rows(table, &mut rows);
     if rows.is_empty() {
         return String::new();
     }
@@ -305,16 +347,20 @@ fn serialize_table(table: &DomNode) -> String {
     let mut table_data: Vec<Vec<String>> = rows
         .iter()
         .map(|row| {
+            // 单趟按文档序收集本行直接子级的 th/td：
+            // 先 th 后 td 的两趟收集会重排混排行，深入下钻会并入嵌套表格的单元格
             let mut cells: Vec<&DomNode> = Vec::new();
-            for tag in ["th", "td"] {
-                collect_tag_descendants(row, tag, &mut cells);
+            for cell in &row.children {
+                if cell.text.is_none() && (cell.tag == "th" || cell.tag == "td") {
+                    cells.push(cell);
+                }
             }
             cells
                 .iter()
                 .map(|cell| {
                     // 单元格保留行内格式（code/strong/em 等），GFM 表格行内不允许换行，
-                    // 将块级转换产生的换行折叠为空格
-                    children_to_markdown(cell)
+                    // 将块级转换产生的换行折叠为空格；嵌套表格已降级为纯文本
+                    children_to_markdown(cell, 0, true)
                         .trim()
                         .split('\n')
                         .map(str::trim)
@@ -351,16 +397,24 @@ fn serialize_table(table: &DomNode) -> String {
     lines.join("\n")
 }
 
-/// 等价于 `querySelectorAll(tag)` 的先序深度优先收集。
-fn collect_tag_descendants<'a>(node: &'a DomNode, tag: &str, out: &mut Vec<&'a DomNode>) {
-    for child in &node.children {
+/// 行收集仅限当前表格的直接结构（`thead/tbody/tfoot > tr` 或无分节的 `table > tr`）。
+/// 之前的全后代收集会把嵌套表格的行误并入外层，产出结构损坏的 Markdown。
+fn collect_direct_rows<'a>(table: &'a DomNode, out: &mut Vec<&'a DomNode>) {
+    for child in &table.children {
         if child.text.is_some() {
             continue;
         }
-        if child.tag == tag {
-            out.push(child);
+        match child.tag.as_str() {
+            "thead" | "tbody" | "tfoot" => {
+                for row in &child.children {
+                    if row.text.is_none() && row.tag == "tr" {
+                        out.push(row);
+                    }
+                }
+            }
+            "tr" => out.push(child),
+            _ => {}
         }
-        collect_tag_descendants(child, tag, out);
     }
 }
 
@@ -479,6 +533,89 @@ mod tests {
             )],
         );
         assert_eq!(dom_to_markdown(&root), "1. 一\n2. 二\n");
+    }
+
+    #[test]
+    fn respects_ordered_list_start_attribute() {
+        let list = element(
+            "ol",
+            vec![
+                element("li", vec![text("x")]),
+                element("li", vec![text("y")]),
+            ],
+        )
+        .with_attr("start", "5");
+        let root = element("article", vec![list]);
+        assert_eq!(dom_to_markdown(&root), "5. x\n6. y\n");
+    }
+
+    #[test]
+    fn indents_nested_list_items() {
+        // 嵌套列表必须按标记宽度缩进，否则层级语义退化为同级列表
+        let inner = element("ul", vec![element("li", vec![text("b")])]);
+        let outer = element("ul", vec![element("li", vec![text("a"), inner])]);
+        let root = element("article", vec![outer]);
+        assert_eq!(dom_to_markdown(&root), "- a\n  - b\n");
+    }
+
+    #[test]
+    fn preserves_inline_formatting_in_task_items() {
+        let li = element(
+            "li",
+            vec![
+                element("input", vec![]).with_attr("type", "checkbox"),
+                text("待办 "),
+                element("code", vec![text("x=1")]),
+            ],
+        );
+        let root = element("article", vec![element("ul", vec![li])]);
+        assert_eq!(dom_to_markdown(&root), "- [ ] 待办 `x=1`\n");
+    }
+
+    #[test]
+    fn degrades_nested_table_to_plain_text() {
+        let inner_table = element(
+            "table",
+            vec![element("tr", vec![element("td", vec![text("inner")])])],
+        );
+        let outer = element(
+            "table",
+            vec![element(
+                "tr",
+                vec![
+                    element("td", vec![text("outer")]),
+                    element("td", vec![inner_table]),
+                ],
+            )],
+        );
+        let root = element("article", vec![outer]);
+        // 内层表格降级为纯文本，内层行/分隔行不再混入外层
+        assert_eq!(dom_to_markdown(&root), "| outer | inner |\n| --- | --- |\n");
+    }
+
+    #[test]
+    fn picks_longer_fence_for_backtick_content() {
+        let pre = element(
+            "pre",
+            vec![element(
+                "code",
+                vec![text("code\n```\nmore")],
+            )
+            .with_classes(&["language-md"])],
+        );
+        let root = element("article", vec![pre]);
+        // 内容含三反引号行时围栏加长为四反引号，避免提前闭合
+        assert_eq!(dom_to_markdown(&root), "````md\ncode\n```\nmore\n````\n");
+    }
+
+    #[test]
+    fn keeps_inline_code_content_with_backticks() {
+        let root = element(
+            "article",
+            vec![element("p", vec![element("code", vec![text("a``b")])])],
+        );
+        // 内容含双反引号时行内围栏加长为三反引号
+        assert_eq!(dom_to_markdown(&root), "```a``b```\n");
     }
 
     #[test]

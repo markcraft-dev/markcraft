@@ -1,6 +1,6 @@
 //! 文章大纲构建：slug 去重、扁平列表与层级树。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -34,32 +34,34 @@ pub struct OutlineResult {
     pub list: Vec<OutlineEntry>,
 }
 
-/// 与 JS 版 `generateSlug` 一致的重名处理：首个用基名，其后依次 `-1`、`-2`……
-fn slug_with_counters(base: &str, counters: &mut HashMap<String, i64>) -> String {
-    match counters.get_mut(base) {
-        Some(counter) => {
-            let suffix = *counter;
-            *counter += 1;
-            format!("{base}-{suffix}")
+/// 与 JS 版 `generateSlug` 一致的重名处理：维护「已用集合」，基名被占用后
+/// 依次尝试 `-1`、`-2`……直到找到未占用的 slug，保证全局唯一（GitHub 式行为）。
+/// 只按基名计数会让 `a, a, a-1` 序列产出重复的 `#a-1`。
+fn unique_slug(base: &str, used: &mut HashSet<String>) -> String {
+    if used.insert(base.to_string()) {
+        return base.to_string();
+    }
+    let mut n: i64 = 1;
+    loop {
+        let candidate = format!("{base}-{n}");
+        if used.insert(candidate.clone()) {
+            return candidate;
         }
-        None => {
-            counters.insert(base.to_string(), 1);
-            base.to_string()
-        }
+        n += 1;
     }
 }
 
 /// 输入按文档顺序排列的标题（文本已去除首尾空白），输出扁平列表与嵌套树。
 pub fn build_outline(headings: &[HeadingInput], max_level: i64) -> OutlineResult {
     let mut flat: Vec<OutlineEntry> = Vec::new();
-    let mut counters: HashMap<String, i64> = HashMap::new();
+    let mut used_slugs: HashSet<String> = HashSet::new();
     // 栈中保存 (条目 id, 标题层级)
     let mut stack: Vec<(i64, i64)> = Vec::new();
 
     for (idx, heading) in headings.iter().enumerate() {
         let text = heading.text.trim();
         let base = slugify(text);
-        let slug = slug_with_counters(&base, &mut counters);
+        let slug = unique_slug(&base, &mut used_slugs);
         let level = heading.level;
         let id = idx as i64;
 
@@ -162,6 +164,15 @@ mod tests {
         let result = build_outline(&headings(&[("同一名", 2), ("同一名", 2), ("同一名", 2)]), 6);
         let hrefs: Vec<&str> = result.list.iter().map(|e| e.href.as_str()).collect();
         assert_eq!(hrefs, vec!["#%E5%90%8C%E4%B8%80%E5%90%8D", "#%E5%90%8C%E4%B8%80%E5%90%8D-1", "#%E5%90%8C%E4%B8%80%E5%90%8D-2"]);
+    }
+
+    #[test]
+    fn keeps_slugs_unique_on_base_collision() {
+        // 「a, a, a-1」序列：只按基名计数会让第三个标题撞上已占用的 #a-1；
+        // 已用集合 + 递增后缀保证全局唯一。
+        let result = build_outline(&headings(&[("a", 1), ("a", 1), ("a-1", 1)]), 6);
+        let hrefs: Vec<&str> = result.list.iter().map(|e| e.href.as_str()).collect();
+        assert_eq!(hrefs, vec!["#a", "#a-1", "#a-1-1"]);
     }
 
     #[test]

@@ -21,8 +21,18 @@ export function loadAnalyzer(): Promise<WasmAnalyzer | null> {
       ? chrome.runtime.getURL('content/wasm/markdown_analyzer.js')
       : '../wasm/markdown_analyzer.js'
     wasmPromise = import(/* @vite-ignore */ wasmUrl)
-      .then((module) => module as unknown as WasmAnalyzer)
-      .catch(() => null)
+      .then(async (module) => {
+        const analyzer = module as unknown as WasmAnalyzer
+        // 统一在此完成一次性初始化：导出函数依赖模块级 wasm 实例，
+        // 未初始化就调用会直接 TypeError（此前只有目录解析路径初始化过）
+        await analyzer.default()
+        return analyzer
+      })
+      .catch((err) => {
+        // 加载或初始化失败：缓存 null 短路，所有调用方统一走 JS 回退
+        console.debug('[MarkCraft] WASM analyzer unavailable, using JS fallback:', err)
+        return null
+      })
   }
   return wasmPromise
 }
