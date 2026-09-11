@@ -64,16 +64,24 @@ export async function copyAsRichText(element: HTMLElement): Promise<boolean> {
   }
 }
 
+/** 标题等插值进导出模板前做 HTML 转义，防止 `</title><script>…` 类注入。 */
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (ch) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] || ch
+  ))
+}
+
 /**
  * Export rendered document as a standalone single-file HTML with embedded styles
  */
 export function exportAsStandaloneHtml(title: string, renderedHtml: string): void {
+  const safeTitle = escapeHtml(title) || 'MarkCraft Document'
   const fullHtml = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title || 'MarkCraft Document'}</title>
+  <title>${safeTitle}</title>
   <style>
     :root {
       --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
