@@ -27,7 +27,7 @@ Rust crate: `wasm/markdown_analyzer` (output: `src/content/wasm/`, loaded from
 1. **JS owns side effects**: `querySelector`/`textContent`/`checked`, fetch via
    the background service worker, clipboard, IndexedDB, file handles.
 2. **Rust owns rules**: anything that decides *what the output looks like* —
-   parsing, filtering, mapping, scoring, serialization.
+   parsing, filtering, mapping, statistics, serialization.
 3. **Snapshots are generic**: the DOM serializer in `dom-to-markdown.ts`
    captures `{tag, classes, attrs, text, children}` plus the checkbox
    *property* (user toggles are not reflected as attributes). It contains no

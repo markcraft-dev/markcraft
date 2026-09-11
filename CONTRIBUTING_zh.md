@@ -6,7 +6,6 @@
 
 ```bash
 pnpm install
-pnpm run resources:test
 pnpm run build
 ```
 

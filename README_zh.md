@@ -16,15 +16,27 @@ MarkCraft 是一款以隐私优先为理念的 Chrome 扩展，用于直接在�
 ## 开发
 
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
-生产构建产物位于 `dist/`。打开 `chrome://extensions`，启用开发者模式后加载该目录即可进行本地测试。
+`pnpm run build` 会先把 Rust 核心算法 crate 编译为 WASM（`pnpm run build:wasm`，需先安装 [wasm-pack](https://rustwasm.github.io/wasm-pack/)），再把扩展打包到 `dist/`。打开 `chrome://extensions`，启用开发者模式后加载该目录即可进行本地测试。
+
+### 可选：本地文件零弹窗保存
+
+`file://` 页面属于不透明来源（opaque origin），Chrome 在其上禁用 IndexedDB，File System Access 的授权无法持久化——每次刷新后保存都会重新弹出授权对话框。安装配套的 Rust Native Messaging 宿主后，保存将直接覆盖本地原文件，全程零弹窗：
+
+```bash
+cd native-host && ./install.sh   # 安装后在 chrome://extensions 中重新加载扩展
+```
 
 ## 文档
 
 - [English documentation](README.md)
+- [WASM 核心层架构](docs/wasm_core.zh-CN.md) / [WASM core architecture](docs/wasm_core.md)
+- [代码库全量分析](docs/codebase_analysis.zh-CN.md)
+- [性能优化说明](docs/performance_optimization.zh-CN.md) / [Performance notes](docs/performance_optimization.md)
+- [渲染管线复核](docs/rendering_review.zh-CN.md)
 
 ## 隐私
 

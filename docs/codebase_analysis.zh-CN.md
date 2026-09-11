@@ -28,7 +28,7 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 │   wasm/ ── wasm-pack 产物（markdown_analyzer_bg.wasm 等）
 ├─ background service worker（bg-fetch 代理 + 快捷键转发）
 ├─ popup / options（偏好设置 UI）
-└─ Rust crate：markdown_analyzer（8 个导出函数，34 个单元测试）
+└─ Rust crate：markdown_analyzer（8 个导出函数，45 个单元测试）
 ```
 
 ---
@@ -40,7 +40,7 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 | 文件 | 职责 | WASM 状态 |
 |---|---|---|
 | `src/content/index.ts` | 内容脚本入口。判断页面是否为 Markdown（后缀 + Content-Type + `<pre>` 启发式）或本地目录；挂载 Vue 应用到 `#mdr-root`。纯页面准入闸门，运行在 WASM 可用之前，保留 JS。 | 保留 JS（注入时序所限） |
-| `src/content/App.vue` | 主应用：状态中枢（主题/侧栏/编辑模式/脏标记），渲染管线 `updateMarkdown`（渲染 → 大纲 → 增强 → Mermaid），保存管线 `saveInPlace`（文件句柄 → 目录句柄静默覆盖 → 首次目录授权 → 单文件对话框兜底），全局快捷键、调色盘动作分发。 | `domToMarkdown`/`extractOutline` 改为 await WASM 版 |
+| `src/content/App.vue` | 主应用：状态中枢（主题/侧栏/编辑模式/脏标记），渲染管线 `updateMarkdown`（渲染 → 大纲 → 增强 → Mermaid），保存管线 `saveInPlace`（文件句柄 → 目录句柄静默覆盖 → 首次目录授权 → 单文件对话框兜底）、Markdown 原文下载，全局快捷键、调色盘动作分发。 | `domToMarkdown`/`extractOutline` 改为 await WASM 版 |
 
 ### core/（核心逻辑层）
 
@@ -55,10 +55,10 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 | `core/palette.ts` | ⌘K 面板：文件树扁平化（subPath 拼接）、标题条目映射（`文章大纲 H{n} 章节`）、空查询推荐（前 12）、关键词包含过滤（前 16），全部在 Rust `search_palette`。 | ✅ WASM + 回退 |
 | `core/doc-stats.ts` | 字数（去空白、UTF-16 口径对齐 JS `.length`）与阅读时长（400 字/分钟向上取整，最小 1），Rust `doc_stats`。 | ✅ WASM + 回退 |
 | `core/enhancements.ts` | DOM 增强：代码块包裹（macOS 圆点 + 语言标签 + 复制按钮）、图片点击灯箱。纯 DOM 操作。 | 保留 JS |
-| `core/export.ts` | 富文本复制（微信/知乎内联样式）、单文件 HTML 导出模板、Markdown 下载。 | 保留 JS |
+| `core/export.ts` | 富文本复制（微信/知乎内联样式）、单文件 HTML 导出模板。 | 保留 JS |
 | `core/file-handle-storage.ts` | IndexedDB 持久化 `FileSystemFileHandle` 与 `FileSystemDirectoryHandle`：文件句柄与目录句柄双路静默保存；目录授权一次后按 URL 前缀最长匹配沿路径下钻覆盖（`create:false` 绝不新建）。注意：`file://` 页面为透明来源，浏览器禁用其 IndexedDB，句柄仅会话内存活——跨会话零弹窗由 `core/native-save.ts`（Native Messaging 宿主）承担。 | 保留 JS（浏览器 API） |
 | `core/native-save.ts` | 经 background 中继 `chrome.runtime.connectNative`，把 `{path, content}` 交给 Rust 本机写入宿主（`native-host/`）直接覆盖原文件；宿主缺失时超时回退。 | 保留 JS（浏览器 API） |
-| `core/theme.ts` | 主题（auto/light/sepia/dark/nordic）与字体/字号/宽度/自定义 CSS 应用。 | 保留 JS |
+| `core/theme.ts` | 主题（auto/light/sepia/verdant/dark/nordic/dracula 共 7 态）与字体/字号/宽度/自定义 CSS 应用。 | 保留 JS |
 
 ### components/（内容脚本 UI）
 
@@ -74,7 +74,7 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 | `components/ActionBar.vue` | 旧版浮动操作栏（当前 App.vue 未挂载，保留备用）。 |
 | `components/About.vue` / `BackToTop.vue` / `ImageLightbox.vue` | 关于弹窗 / 回顶按钮（环形进度）/ 图片灯箱（缩放/下载/Esc）。 |
 
-### shared/ 与其余 UI 面
+### shared/、components/ 与其余 UI 面
 
 | 文件 | 职责 |
 |---|---|
@@ -82,9 +82,9 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 | `shared/constants.ts` | 插件清单 `DEFAULT_PLUGINS` 与 `DEFAULT_SETTINGS`。 |
 | `shared/storage.ts` | `useStorage()`：chrome.storage.local 读写 + `normalizeSettings` 边界归一（mdPlugins 字符串/数组兼容）。 |
 | `shared/i18n.ts` | `chrome.i18n.getMessage` 薄封装。 |
-| `components/CustomSelect.vue` | 自定义下拉（新增未提交文件）。 |
-| `components/IconButton.vue` / `SvgIcon.vue` / `icons/IconLogo.vue` | 图标按钮、SVG 图标注册与品牌 Logo。 |
-| `popup/`（App.vue + main.ts + index.html） | 弹窗：主题四态、字号、KaTeX/Mermaid 开关。 |
+| `src/components/CustomSelect.vue` | 自定义下拉（新增未提交文件）。 |
+| `src/components/IconButton.vue` / `SvgIcon.vue` / `icons/IconLogo.vue` | 图标按钮、SVG 图标注册与品牌 Logo（与上方 shared/ 不同，均位于 `src/components/`）。 |
+| `popup/`（App.vue + main.ts + index.html） | 弹窗：主题七态、字号、KaTeX/Mermaid 开关。 |
 | `options/`（App.vue + main.ts + index.html） | 设置页：主题/字体、插件矩阵、自定义 CSS。 |
 | `content/styles/markdown.css` | 渲染文档样式。 |
 | `content/styles/style.css` | 976KB 预编译聚合样式（历史产物，含 github-markdown-css/katex/hljs/uno）。 |
@@ -100,13 +100,13 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 | 模块 | 导出函数（`#[wasm_bindgen]`） | 对应原 JS | 单测 |
 |---|---|---|---|
 | `directory.rs` | `parse_directory` / `filter_directory` / `scan_directory` / `ancestor_folder_urls` | folder.ts 内嵌正则与过滤 | 8 |
-| `dommd.rs` | `dom_to_markdown`（DOM 快照 → GFM 全部规则） | dom-to-markdown.ts | 11 |
-| `outline.rs` | `build_outline`（slug 去重 + 树） | outline.ts | 4 |
-| `slug.rs` | （内部）`slugify` / `encode_uri_component` | generateSlug | 3 |
-| `palette.rs` | `search_palette` | SearchPaletteModal 内嵌逻辑 | 5 |
+| `dommd.rs` | `dom_to_markdown`（DOM 快照 → GFM 全部规则） | dom-to-markdown.ts | 22 |
+| `outline.rs` | `build_outline`（slug 去重 + 树） | outline.ts | 5 |
+| `slug.rs` | （内部）`slugify` / `encode_uri_component` | generateSlug | 4 |
+| `palette.rs` | `search_palette` | SearchPaletteModal 内嵌逻辑 | 4 |
 | `stats.rs` | `doc_stats` | RightSidebar 内嵌逻辑 | 2 |
 
-合计 34 个 `cargo test` 单测，`cargo clippy -D warnings` 干净。
+合计 45 个 `cargo test` 单测（以 `cargo test` 实时输出为准），`cargo clippy -D warnings` 干净。
 注意两条工程约束（已写入代码注释）：
 
 1. **导出参数禁止 i64**：wasm-bindgen 会把 i64 映射为 BigInt，JS 传 number 直接抛错；统一用 i32。
@@ -120,8 +120,8 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 |---|---|
 | `scripts/build.mjs` | Vite 编排：popup/options 两 HTML 入口 → 内容脚本 IIFE（`content/index.global.js`）→ background ESM → 拷贝 manifest/locales/assets/wasm → 内容脚本 ASCII 转义（`\uXXXX`）→ 递归 chmod。watch 模式 200ms 防抖。 |
 | `scripts/build_wasm.mjs` | `wasm-pack build --target web --release --out-dir src/content/wasm`。 |
-| `public/manifest.json` | MV3：注入 `*.md*` 全协议 + `file:///*`；`web_accessible_resources` 放行 `content/wasm/*`（WASM 动态加载的前提）；permissions 仅 storage/tabs；4 个快捷键命令。 |
-| `public/_locales/*` | en/zh_CN/zh_TW/ja/ko/uk 等 9 语言描述与命令文案。 |
+| `public/manifest.json` | MV3：注入 `*.md*` 全协议 + `file:///*`；`web_accessible_resources` 放行 `content/wasm/*`（WASM 动态加载的前提）；permissions 为 storage / nativeMessaging（nativeMessaging 仅用于可选的本机写入宿主，未安装宿主时该能力不生效，保存回退目录授权 + 另存对话框）；2 个快捷键命令。 |
+| `public/_locales/*` | en/en_GB/en_US/zh_CN/zh_TW/ja/ko/uk 共 8 语言的描述与命令文案（en 为 default_locale）。 |
 | `public/assets/` | Logo、内置字体（NotoSerifSC/GeistMono/Merriweather 等）。 |
 | `index.html`（根目录） | 开发用预览页。 |
 | `uno.config.ts` / `tsconfig.json` | UnoCSS 原子化配置；TS strict 配置。 |
@@ -139,10 +139,9 @@ JS 层只保留 DOM 读取、网络与浏览器 API 调用，所有失败场景�
 
 ## 六、辅助目录（不影响扩展运行）
 
-- `.trellis/`：Trellis 开发工作流（spec 规范、任务、日志）；`.trellis/spec/frontend/` 约定「纯解析/转换逻辑放可测试模块、保留浏览器能力检测、避免新 any」。
-- `.agents/`、`.codex/`：平台技能与 agent 配置。
+- `.codex/`：本地 agent/技能配置（被 .gitignore 忽略，仅存在于部分本地环境）。
 - `.github/`：CI（workflows）、ISSUE 模板、FUNDING 等。
-- `reference/`：外部参考资料归档（codex-mobile、实验项目、资源归档），非扩展代码。
+- `reference/`：外部参考资料归档（codex-mobile、实验项目、资源归档），非扩展代码（被 .gitignore 忽略）。
 - `dist/`：构建产物（已随构建更新，含 `content/wasm/` 完整 WASM 包）。
 
 ---

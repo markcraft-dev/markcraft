@@ -16,11 +16,11 @@ It provides a polished Markdown reading experience with in-browser WYSIWYG editi
 ## Development
 
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
-`npm run build` first compiles the Rust core-algorithm crate to WASM (`npm run build:wasm`, requires `wasm-pack`) and then bundles the extension into `dist/`. Load that directory from `chrome://extensions` with Developer mode enabled.
+`pnpm run build` first compiles the Rust core-algorithm crate to WASM (`pnpm run build:wasm`, requires [wasm-pack](https://rustwasm.github.io/wasm-pack/)) and then bundles the extension into `dist/`. Load that directory from `chrome://extensions` with Developer mode enabled.
 
 ### Optional: zero-dialog saves for local files
 
@@ -35,7 +35,8 @@ cd native-host && ./install.sh   # then reload the extension in chrome://extensi
 - [中文文档](README_zh.md)
 - [WASM core architecture](docs/wasm_core.md) / [WASM 核心层架构](docs/wasm_core.zh-CN.md)
 - [Codebase analysis (中文)](docs/codebase_analysis.zh-CN.md)
-- [Performance notes](docs/performance_optimization.md)
+- [Performance notes](docs/performance_optimization.md) / [Performance notes (中文)](docs/performance_optimization.zh-CN.md)
+- [Rendering review (中文)](docs/rendering_review.zh-CN.md)
 
 ## Privacy
 
