@@ -33,7 +33,8 @@ export function tryNativeSave(fileUrl: string, content: string): Promise<boolean
     // 宿主缺失时 background 可能只触发 onDisconnect，超时兜底防止挂起
     const timer = setTimeout(() => done(false), NATIVE_SAVE_TIMEOUT_MS)
     try {
-      chrome.runtime.sendMessage({ type: 'native-save', path, content }, (res) => {
+      // sourceUrl 让 SW 中统能校验 path 确由该 file:// 来源 URL 推导（纵深防御）
+      chrome.runtime.sendMessage({ type: 'native-save', path, content, sourceUrl: fileUrl }, (res) => {
         clearTimeout(timer)
         void chrome.runtime.lastError
         done(!!(res && (res as { ok?: boolean }).ok))
