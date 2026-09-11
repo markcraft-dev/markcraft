@@ -126,7 +126,7 @@ import BackToTop from './components/BackToTop.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import SearchPaletteModal, { type PaletteItem } from './components/SearchPaletteModal.vue'
 import ImageLightbox from './components/ImageLightbox.vue'
-import { renderMarkdown, renderMermaidDiagrams } from './core/markdown'
+import { renderMarkdown, renderMermaidDiagrams, rerenderMermaidDiagrams } from './core/markdown'
 import { extractOutline } from './core/outline'
 import { applyTheme, applyCustomStyles } from './core/theme'
 import { enhanceContentBlocks, renderTocContainer } from './core/enhancements'
@@ -203,18 +203,24 @@ function openLightbox(src: string, alt: string) {
   lightboxVisible.value = true
 }
 
-const { settings, loadSettings } = useStorage()
+const { settings, loadSettings, saveSettings } = useStorage()
 
+// 渲染序号守卫：快速连续切换文档时丢弃过期渲染的后处理（增强/大纲/图表），
+// 避免 Mermaid 等异步后处理跑在已被替换的 DOM 上
+let renderSeq = 0
 async function updateMarkdown(rawText: string) {
+  const seq = ++renderSeq
   rawMarkdownContent.value = rawText
   renderedHtml.value = renderMarkdown(rawText, settings.value.mdPlugins)
   await nextTick()
+  if (seq !== renderSeq) return
 
   if (contentRef.value) {
     enhanceContentBlocks(contentRef.value, openLightbox)
     await refreshOutline()
   }
 
+  if (seq !== renderSeq) return
   await renderMermaidDiagrams()
 }
 
@@ -306,7 +312,6 @@ async function saveInPlace(): Promise<boolean> {
       if (ok) {
         await storeDirectoryHandle(dirUrl, dirHandle)
         await storeFileHandle(fileUrl, fileHandle)
-        await storeFileHandle(fileName, fileHandle)
         rawMarkdownContent.value = newMarkdown
         isDirty.value = false
         showToast('✓ 已覆盖保存原文件；此文件夹后续将静默保存')
@@ -334,7 +339,6 @@ async function saveInPlace(): Promise<boolean> {
       })
       if (handle) {
         await storeFileHandle(fileUrl, handle)
-        await storeFileHandle(fileName, handle)
 
         const ok = await writeToFileHandle(handle, newMarkdown)
         if (ok) {
@@ -398,8 +402,10 @@ function toggleTheme() {
   const next = sequence[(curIdx + 1) % sequence.length]
   currentTheme.value = next
   applyTheme(next)
-  settings.value.pageTheme = next
-  useStorage().saveSettings({ pageTheme: next })
+  void rerenderMermaidDiagrams()
+  // 必须复用同一 useStorage 实例：新建实例会以默认设置整体写回，
+  // 覆盖用户已保存的字体/宽度/插件等设置
+  void saveSettings({ pageTheme: next })
 }
 
 function handlePaletteSelectFile(item: PaletteItem) {
@@ -473,6 +479,21 @@ async function handlePaletteAction(actionId: string) {
 
 // Global Shortcuts: Cmd+K, Cmd+B, Cmd+U, Cmd+E, Cmd+S, Cmd+, Alt+C, Alt+H
 function handleGlobalKeydown(e: KeyboardEvent) {
+  // 焦点在可编辑元素时归还按键，避免劫持宿主页/扩展自身输入框的文本操作；
+  // 扩展 UI 内仅保留搜索面板的 Cmd+K 与编辑画布中的 Cmd+S
+  const target = e.target as HTMLElement | null
+  const isEditable = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+  if (isEditable) {
+    const appRoot = document.getElementById('mdr-root')
+    const inApp = !!appRoot && !!target && appRoot.contains(target)
+    const isMeta = e.metaKey || e.ctrlKey
+    const key = e.key.toLowerCase()
+    const allowToggleSearch = inApp && isMeta && key === 'k'
+    const inEditor = inApp && !!contentRef.value && (target === contentRef.value || contentRef.value.contains(target))
+    const allowSave = inEditor && isMeta && key === 's'
+    if (!allowToggleSearch && !allowSave) return
+  }
+
   const isMeta = e.metaKey || e.ctrlKey
   if (isMeta && e.key.toLowerCase() === 'k') {
     e.preventDefault()
@@ -510,10 +531,15 @@ function handleStorageChanges(changes: Record<string, chrome.storage.StorageChan
   if (area !== 'local' || !changes.settings) return
   const next = normalizeSettings(changes.settings.newValue)
   const pluginsChanged = JSON.stringify(next.mdPlugins) !== JSON.stringify(settings.value.mdPlugins)
+  const themeChanged = next.pageTheme !== settings.value.pageTheme
   settings.value = next
   // 同步顶栏主题图标（弹窗/其他标签页修改时本页 currentTheme 不会自动更新）
   currentTheme.value = next.pageTheme
   applyTheme(next.pageTheme)
+  if (themeChanged) {
+    // 主题变化后立即以新配色重绘已渲染的 Mermaid 图表（设置即时生效）
+    void rerenderMermaidDiagrams()
+  }
   applyCustomStyles(
     next.enableCustomCSS ? next.customCSS : undefined,
     next.enableCustomContentWidth ? next.customContentWidth : undefined,

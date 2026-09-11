@@ -46,7 +46,10 @@ export function initMarkdownRenderer(activePlugins: string[] = [], pluginOptions
   mermaidEnabled = isEnabled('Mermaid')
 
   const md = new MarkdownIt({
-    html: true,
+    // 安全：内容脚本按设计渲染不可信的远程/本地文档。html:false 使源文档中的
+    // 原始 HTML 被转义为纯文本展示，渲染产物只包含渲染器自身生成的标记，
+    // 配合 v-html 也不会注入宿主页可执行的脚本（raw HTML 渲染不支持且默认关闭）。
+    html: false,
     // Linkify 开关
     linkify: isEnabled('Linkify'),
     typographer: true,
@@ -106,7 +109,9 @@ export async function renderMermaidDiagrams() {
     mermaid.initialize({
       startOnLoad: false,
       theme: document.documentElement.dataset.mdrTheme === 'dark' ? 'dark' : 'default',
-      securityLevel: 'loose'
+      // 安全：strict（默认值）保持 Mermaid 对图标签内 HTML/事件的净化，
+      // 防止图表源码中的内嵌标记在宿主页执行。
+      securityLevel: 'strict'
     })
     await mermaid.run({
       querySelector: '.mermaid'
@@ -114,4 +119,20 @@ export async function renderMermaidDiagrams() {
   } catch (e) {
     console.warn('Mermaid rendering failed:', e)
   }
+}
+
+/**
+ * 主题切换后重建图表：mermaid.initialize 的主题在渲染时固定，
+ * 已渲染（data-processed）的图表需先从 data-mermaid-source 还原源码再重绘，
+ * 使配色立即跟随新主题。
+ */
+export async function rerenderMermaidDiagrams() {
+  if (!mermaidEnabled) return
+  document.querySelectorAll<HTMLElement>('.mermaid[data-mermaid-source]').forEach((el) => {
+    if (!el.dataset.processed) return
+    const source = el.getAttribute('data-mermaid-source') || ''
+    el.removeAttribute('data-processed')
+    el.textContent = source
+  })
+  await renderMermaidDiagrams()
 }

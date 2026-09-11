@@ -27,7 +27,7 @@ export function normalizeSettings(raw: any): UserSettings {
   return merged
 }
 
-export function useStorage() {
+function createStorage() {
   const settings = ref<UserSettings>({ ...DEFAULT_SETTINGS } as UserSettings)
 
   const loadSettings = async () => {
@@ -38,7 +38,7 @@ export function useStorage() {
           settings.value = normalizeSettings(data.settings)
         }
       } catch (e) {
-        console.warn('[Markdown Reader] Failed to load settings from storage:', e)
+        console.warn('[MarkCraft] Failed to load settings from storage:', e)
         settings.value = { ...DEFAULT_SETTINGS } as UserSettings
       }
     }
@@ -51,7 +51,7 @@ export function useStorage() {
       try {
         await chrome.storage.local.set({ settings: next })
       } catch (e) {
-        console.warn('[Markdown Reader] Failed to save settings to storage:', e)
+        console.warn('[MarkCraft] Failed to save settings to storage:', e)
       }
     }
   }
@@ -61,4 +61,16 @@ export function useStorage() {
     loadSettings,
     saveSettings
   }
+}
+
+// 同一 JS 上下文（内容脚本页 / popup / options）内共享同一实例：
+// 每次调用都新建实例会让各实例以「默认设置 + 局部改动」整体写回 chrome.storage，
+// 把其他组件已保存的自定义设置静默覆盖掉。
+let sharedStorage: ReturnType<typeof createStorage> | null = null
+
+export function useStorage() {
+  if (!sharedStorage) {
+    sharedStorage = createStorage()
+  }
+  return sharedStorage
 }
