@@ -21,8 +21,13 @@ interface StoredDirectory {
   handle: FileSystemDirectoryHandle
 }
 
+// 连接懒加载单例：避免每次操作各开一条连接堆积依赖 GC；
+// 版本变更（onversionchange）时主动关闭并在下次调用时重开
+let dbPromise: Promise<IDBDatabase> | null = null
+
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (dbPromise) return dbPromise
+  dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
     request.onupgradeneeded = () => {
       const db = request.result
@@ -30,9 +35,20 @@ function openDB(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_HANDLES)
       }
     }
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const db = request.result
+      db.onversionchange = () => {
+        db.close()
+        dbPromise = null
+      }
+      resolve(db)
+    }
+    request.onerror = () => {
+      dbPromise = null
+      reject(request.error)
+    }
   })
+  return dbPromise
 }
 
 function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
@@ -181,15 +197,13 @@ export async function writeToFileHandle(handle: FileSystemFileHandle, content: s
 
 /**
  * Perform silent save to the given file URL if a handle is already authorized
+ *
+ * 安全约束：只允许以「完整 file:// URL」为键命中句柄。禁止按裸文件名兜底检索——
+ * file:// 页面共享同一透明 origin，不同目录的同名文件会命中彼此的句柄，
+ * 造成静默把 A 文件内容写成 B 的数据损坏。
  */
 export async function trySilentSave(fileUrl: string, content: string): Promise<boolean> {
-  const fileName = decodeURIComponent(fileUrl.split('/').pop() || '')
-
-  // 1. Try exact file URL key
-  let handle = await retrieveFileHandle(fileUrl)
-  if (!handle && fileName) {
-    handle = await retrieveFileHandle(fileName)
-  }
+  const handle = await retrieveFileHandle(fileUrl)
 
   if (handle) {
     const ok = await writeToFileHandle(handle, content)
