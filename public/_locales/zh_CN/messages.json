@@ -14,13 +14,5 @@
   "command_toggle_side": {
     "message": "切换侧边栏",
     "description": "Shortcut command: toggleSide"
-  },
-  "command_toggle_centered": {
-    "message": "切换居中排版",
-    "description": "Shortcut command: toggleCentered"
-  },
-  "command_toggle_refresh": {
-    "message": "刷新 Markdown 文档",
-    "description": "Shortcut command: toggleRefresh"
   }
 }

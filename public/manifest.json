@@ -21,22 +21,10 @@
       "type": "module"
    },
    "commands": {
-      "toggleCentered": {
-         "description": "__MSG_command_toggle_centered__",
-         "suggested_key": {
-            "default": "Alt+Shift+C"
-         }
-      },
       "togglePageTheme": {
          "description": "__MSG_command_toggle_theme__",
          "suggested_key": {
             "default": "Alt+Shift+T"
-         }
-      },
-      "toggleRefresh": {
-         "description": "__MSG_command_toggle_refresh__",
-         "suggested_key": {
-            "default": "Alt+Shift+R"
          }
       },
       "toggleSide": {
@@ -71,7 +59,7 @@
       "open_in_tab": true,
       "page": "options/index.html"
    },
-   "permissions": [ "storage", "tabs", "nativeMessaging" ],
+   "permissions": [ "storage", "nativeMessaging" ],
    "web_accessible_resources": [
       {
          "matches": [ "<all_urls>" ],

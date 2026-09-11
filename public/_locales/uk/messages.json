@@ -1,20 +1,18 @@
 {
-   "command_toggle_centered": {
-      "message": "Перемкнути по центру"
-   },
-   "command_toggle_refresh": {
-      "message": "Загальне перезавантаження"
-   },
-   "command_toggle_side": {
-      "message": "Перемкнути бічну панель"
-   },
-   "command_toggle_theme": {
-      "message": "Перемкнути тему"
-   },
-   "ext_desc": {
-      "message": "Найкращий спосіб переглядати Markdown у вашому браузері."
-   },
-   "ext_name": {
-      "message": "Markdown Reader"
-   }
+  "ext_name": {
+    "message": "MarkCraft",
+    "description": "The name of the extension."
+  },
+  "ext_desc": {
+    "message": "Стильне оформлення та WYSIWYG: робочий простір для читання й написання Markdown у браузері",
+    "description": "The description of the extension."
+  },
+  "command_toggle_theme": {
+    "message": "Перемкнути тему",
+    "description": "Shortcut command: togglePageTheme"
+  },
+  "command_toggle_side": {
+    "message": "Перемкнути бічну панель",
+    "description": "Shortcut command: toggleSide"
+  }
 }

@@ -14,13 +14,5 @@
   "command_toggle_side": {
     "message": "Toggle Sidebar",
     "description": "Shortcut command: toggleSide"
-  },
-  "command_toggle_centered": {
-    "message": "Toggle Centered Layout",
-    "description": "Shortcut command: toggleCentered"
-  },
-  "command_toggle_refresh": {
-    "message": "Refresh Document",
-    "description": "Shortcut command: toggleRefresh"
   }
 }
