@@ -25,7 +25,8 @@ function parseDirectoryFallback(source: string): ParsedDirectoryItem[] {
 export async function parseDirectory(source: string): Promise<ParsedDirectoryItem[]> {
   const wasm = await loadAnalyzer()
   if (wasm) {
-    try { await wasm.default(); const result = wasm.parse_directory(source); if (Array.isArray(result)) return result as ParsedDirectoryItem[] } catch { /* 回退到 JS */ }
+    // loadAnalyzer 已完成一次性初始化，这里直接调用导出
+    try { const result = wasm.parse_directory(source); if (Array.isArray(result)) return result as ParsedDirectoryItem[] } catch { /* 回退到 JS */ }
   }
   return parseDirectoryFallback(source)
 }

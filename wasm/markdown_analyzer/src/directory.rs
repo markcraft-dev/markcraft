@@ -150,17 +150,19 @@ pub fn scan_directory(source: &str, base_url: &str) -> DirectoryScan {
 }
 
 /// 从工作区根 URL 推导目标文件的全部祖先目录 URL（自根向下）。
+/// 前缀判断使用补齐尾斜杠后的根 URL，避免 `/root` 误匹配 `/root2` 下的文件。
 pub fn ancestor_folder_urls(root_url: &str, target_file_url: &str) -> Vec<String> {
     let mut ancestors = Vec::new();
-    if !target_file_url.starts_with(root_url) {
+    let root = ensure_trailing_slash(root_url);
+    if !target_file_url.starts_with(&root) {
         return ancestors;
     }
 
-    let relative = &target_file_url[root_url.len()..];
+    let relative = &target_file_url[root.len()..];
     let mut segments: Vec<&str> = relative.split('/').filter(|s| !s.is_empty()).collect();
     segments.pop(); // 末段是文件名
 
-    let mut current = ensure_trailing_slash(root_url);
+    let mut current = root;
     for seg in segments {
         current = format!("{current}{seg}/");
         ancestors.push(current.clone());
@@ -242,5 +244,13 @@ addRow("assets", "assets/", 1, 0, "0 B", 0, "-");"#;
             vec!["file:///root/a/".to_string(), "file:///root/a/b/".to_string()]
         );
         assert!(ancestor_folder_urls("file:///root/", "https://elsewhere/x.md").is_empty());
+    }
+
+    #[test]
+    fn ancestor_urls_do_not_match_prefix_sibling() {
+        // 根 URL 无尾斜杠时不得按裸字符串前缀误匹配同级目录（/root vs /root2）
+        assert!(ancestor_folder_urls("file:///root", "file:///root2/a.md").is_empty());
+        let urls = ancestor_folder_urls("file:///root", "file:///root/sub/a.md");
+        assert_eq!(urls, vec!["file:///root/sub/".to_string()]);
     }
 }
