@@ -12,6 +12,7 @@ public/resources/
 .agents/
 .codex/
 .trellis/
+.agent-teams/
 .trellis/.developer
 .trellis/.runtime/
 .trellis/**/__pycache__/
