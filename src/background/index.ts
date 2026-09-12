@@ -4,6 +4,8 @@ import { fileUrlToNativePath } from '../content/core/native-save'
 
 // 单次写入内容上限（字符数）：远超任何现实文档，防御异常/被攻破上下文的滥用
 const NATIVE_SAVE_MAX_CONTENT_CHARS = 64 * 1024 * 1024
+// 宿主响应基础超时：按内容长度放大（与内容侧 native-save.ts 口径一致）
+const NATIVE_SAVE_BASE_TIMEOUT_MS = 4_000
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'bg-fetch' || request.action === 'bg-fetch') {
@@ -29,9 +31,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // 纵深防御：中继前校验——仅接受本扩展上下文消息；path 必须与请求声明的
     // file:// 来源 URL 推导出的绝对路径一致；内容为字符串且不超过大小上限。
     let responded = false
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined
     const respond = (msg: unknown) => {
       if (!responded) {
         responded = true
+        if (timeoutTimer !== undefined) clearTimeout(timeoutTimer)
         sendResponse(msg)
       }
     }
@@ -62,6 +66,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const err = chrome.runtime.lastError?.message
         respond({ ok: false, error: err || 'native host disconnected' })
       })
+      // 超时断开：按内容长度放大（每 1M 字符 +2s，上限 60s）。宿主挂起时
+      // 主动断开 port 防止资源滞留；内容侧超时同步放大，避免「扩展已回退
+      // 弹窗、宿主迟到写入」的双写窗口
+      const timeoutMs = Math.min(
+        60_000,
+        NATIVE_SAVE_BASE_TIMEOUT_MS + Math.floor(content.length / 1_000_000) * 2_000
+      )
+      timeoutTimer = setTimeout(() => {
+        try {
+          port.disconnect()
+        } catch {
+          // 已断开
+        }
+        respond({ ok: false, error: 'native host timeout' })
+      }, timeoutMs)
       port.postMessage({ path, content })
     } catch (e: any) {
       respond({ ok: false, error: e?.message || String(e) })
