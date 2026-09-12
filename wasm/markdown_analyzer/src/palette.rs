@@ -52,6 +52,26 @@ pub enum PaletteId {
     Number(i64),
 }
 
+fn file_result(node: &PaletteFileNode, path: &str) -> PaletteResult {
+    PaletteResult {
+        id: PaletteId::Text(node.href.clone()),
+        title: node.content.clone(),
+        href: node.href.clone(),
+        sub_path: Some(path.strip_suffix('/').unwrap_or(path).to_string()),
+        is_heading: None,
+    }
+}
+
+fn heading_result(heading: &PaletteHeading) -> PaletteResult {
+    PaletteResult {
+        id: PaletteId::Number(heading.id),
+        title: heading.content.clone(),
+        href: heading.href.clone(),
+        sub_path: Some(format!("文章大纲 H{} 章节", heading.level)),
+        is_heading: Some(true),
+    }
+}
+
 fn flatten_files(nodes: &[PaletteFileNode], path: &str, out: &mut Vec<PaletteResult>) {
     for node in nodes {
         if node.is_folder {
@@ -61,27 +81,12 @@ fn flatten_files(nodes: &[PaletteFileNode], path: &str, out: &mut Vec<PaletteRes
             }
             continue;
         }
-        out.push(PaletteResult {
-            id: PaletteId::Text(node.href.clone()),
-            title: node.content.clone(),
-            href: node.href.clone(),
-            sub_path: Some(path.strip_suffix('/').unwrap_or(path).to_string()),
-            is_heading: None,
-        });
+        out.push(file_result(node, path));
     }
 }
 
 fn heading_items(headings: &[PaletteHeading]) -> Vec<PaletteResult> {
-    headings
-        .iter()
-        .map(|h| PaletteResult {
-            id: PaletteId::Number(h.id),
-            title: h.content.clone(),
-            href: h.href.clone(),
-            sub_path: Some(format!("文章大纲 H{} 章节", h.level)),
-            is_heading: Some(true),
-        })
-        .collect()
+    headings.iter().map(heading_result).collect()
 }
 
 /// 汇总文件与标题条目并按查询过滤；空查询返回推荐前缀，有关键词时做包含匹配。
@@ -90,15 +95,36 @@ pub fn search_palette(
     headings: &[PaletteHeading],
     query: &str,
 ) -> Vec<PaletteResult> {
+    let key = query.trim().to_lowercase();
+    if key.is_empty() {
+        // 空查询惰性展开：凑满推荐条数即停，不再全量扁平化大树
+        let mut combined: Vec<PaletteResult> = Vec::with_capacity(EMPTY_QUERY_LIMIT);
+        let mut stack: Vec<(&PaletteFileNode, String)> =
+            files.iter().rev().map(|n| (n, String::new())).collect();
+        while let Some((node, path)) = stack.pop() {
+            if combined.len() >= EMPTY_QUERY_LIMIT {
+                break;
+            }
+            if node.is_folder {
+                if let Some(children) = &node.children {
+                    let sub = format!("{path}{}/", node.content);
+                    stack.extend(children.iter().rev().map(|c| (c, sub.clone())));
+                }
+                continue;
+            }
+            combined.push(file_result(node, &path));
+        }
+        if combined.len() < EMPTY_QUERY_LIMIT {
+            for heading in headings.iter().take(EMPTY_QUERY_LIMIT - combined.len()) {
+                combined.push(heading_result(heading));
+            }
+        }
+        return combined;
+    }
+
     let mut combined = Vec::new();
     flatten_files(files, "", &mut combined);
     combined.extend(heading_items(headings));
-
-    let key = query.trim().to_lowercase();
-    if key.is_empty() {
-        combined.truncate(EMPTY_QUERY_LIMIT);
-        return combined;
-    }
 
     combined
         .into_iter()
@@ -214,5 +240,18 @@ mod tests {
         .unwrap();
         assert!(node.is_folder);
         assert_eq!(node.children.as_ref().unwrap()[0].href, "file:///docs/a.md");
+    }
+
+    #[test]
+    fn deserializes_heading_entry_fields() {
+        // 标题条目的 id/href/content/level 同样是关键字段，防字段漂移静默置默认值
+        let heading: PaletteHeading = serde_json::from_str(
+            r##"{"id":7,"href":"#%E6%A0%87%E9%A2%98","content":"标题","level":3}"##,
+        )
+        .unwrap();
+        assert_eq!(heading.id, 7);
+        assert_eq!(heading.level, 3);
+        assert_eq!(heading.href, "#%E6%A0%87%E9%A2%98");
+        assert_eq!(heading.content, "标题");
     }
 }

@@ -58,11 +58,16 @@ fn read_number(source: &str, cursor: &mut usize) -> Option<i64> {
         *cursor += ch.len_utf8();
     }
     let start = *cursor;
+    let mut collected = 0usize;
     while *cursor < source.len() {
         let ch = source[*cursor..].chars().next()?;
-        if !ch.is_ascii_digit() && ch != '-' {
+        // 负号只允许出现在首位：`12-34` 这类混合符号串至少保留合法前缀 12，
+        // 不再整体 parse 失败归 0
+        let accepted = ch.is_ascii_digit() || (ch == '-' && collected == 0);
+        if !accepted {
             break;
         }
+        collected += 1;
         *cursor += ch.len_utf8();
     }
     source.get(start..*cursor)?.parse().ok()
@@ -193,6 +198,13 @@ addRow("guide.markdown", "guide.markdown", 0, 8, "8 B", 1725000002, "2024-08-30"
     fn reads_numbers_after_separators() {
         let mut cursor = 0;
         assert_eq!(super::read_number(" , -42,", &mut cursor), Some(-42));
+    }
+
+    #[test]
+    fn keeps_valid_prefix_of_mixed_sign_numbers() {
+        // 混合符号串不再整体解析失败归 0，保留首个合法数字前缀
+        let mut cursor = 0;
+        assert_eq!(super::read_number("12-34", &mut cursor), Some(12));
     }
 
     #[test]

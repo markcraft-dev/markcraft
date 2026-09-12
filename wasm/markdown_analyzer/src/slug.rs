@@ -25,7 +25,7 @@ pub fn encode_uri_component(input: &str) -> String {
     out
 }
 
-/// 生成 slug 基名：小写 → 空格转连字符 → 过滤非法字符 → 百分号编码。
+/// 生成 slug 基名：小写 → 空格转连字符 → 过滤非法字符 → 修剪首尾连字符（GitHub 式）→ 百分号编码。
 pub fn slugify(text: &str) -> String {
     let lowered = text.to_lowercase();
     let mut filtered = String::with_capacity(lowered.len());
@@ -36,7 +36,7 @@ pub fn slugify(text: &str) -> String {
             filtered.push(c);
         }
     }
-    encode_uri_component(filtered.trim_matches(' '))
+    encode_uri_component(filtered.trim_matches('-'))
 }
 
 #[cfg(test)]
@@ -54,8 +54,8 @@ mod tests {
     fn slugifies_cjk_and_ascii() {
         assert_eq!(slugify("中文 标题"), "%E4%B8%AD%E6%96%87-%E6%A0%87%E9%A2%98");
         assert_eq!(slugify("Hello, World!"), "hello-world");
-        // JS 版对未 trim 文本的空格同样会转成 '-'（调用前已 trim，此处验证行为一致）
-        assert_eq!(slugify("  Trim  Me  "), "--trim--me--");
+        // 首尾空格转成的连字符按 GitHub 行为修剪；中间连续空格保留为连续连字符
+        assert_eq!(slugify("  Trim  Me  "), "trim--me");
         assert_eq!(slugify("type_view v2"), "type_view-v2");
         assert_eq!(slugify("50% off?"), "50-off");
     }

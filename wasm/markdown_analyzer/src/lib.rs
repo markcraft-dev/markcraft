@@ -13,7 +13,6 @@ mod stats;
 
 use wasm_bindgen::prelude::*;
 
-use crate::dommd::DomNode;
 use crate::outline::{HeadingInput, OutlineResult};
 use crate::palette::{PaletteFileNode, PaletteHeading, PaletteResult};
 
@@ -64,9 +63,11 @@ pub fn search_palette(files: JsValue, headings: JsValue, query: &str) -> Result<
 }
 
 /// 将 DOM 快照（通用 JSON 树）序列化回标准 GFM Markdown。
+/// 快照解析为迭代实现并限深 [`dommd::MAX_SNAPSHOT_DEPTH`]，
+/// 超深快照直接报错，调用方回退 JS 实现（快照端同样限深 512）。
 #[wasm_bindgen]
 pub fn dom_to_markdown(dom: JsValue) -> Result<String, JsValue> {
-    let root: DomNode = serde_wasm_bindgen::from_value(dom)?;
+    let root = dommd::parse_snapshot(&dom).map_err(|e| JsValue::from_str(&e))?;
     Ok(dommd::dom_to_markdown(&root))
 }
 
