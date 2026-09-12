@@ -76,8 +76,9 @@ function escapeHtml(value: string): string {
  */
 export function exportAsStandaloneHtml(title: string, renderedHtml: string): void {
   const safeTitle = escapeHtml(title) || 'MarkCraft Document'
+  const docLang = document.documentElement.lang || navigator.language || 'zh-CN'
   const fullHtml = `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${docLang}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">

@@ -14,5 +14,29 @@
   "command_toggle_side": {
     "message": "サイドバーの切り替え",
     "description": "Shortcut command: toggleSide"
+  },
+  "ui_toc_title": {
+    "message": "目次",
+    "description": "[TOC] block title"
+  },
+  "ui_copy": {
+    "message": "コピー",
+    "description": "Code block copy button label"
+  },
+  "ui_copied": {
+    "message": "コピーしました",
+    "description": "Code block copy button label after copying"
+  },
+  "ui_copy_heading_link": {
+    "message": "見出しリンクをコピー",
+    "description": "Heading anchor tooltip"
+  },
+  "ui_folder_doc_title": {
+    "message": "フォルダー一覧",
+    "description": "Local folder placeholder document title"
+  },
+  "ui_folder_doc_body": {
+    "message": "サイドバーから読みたい Markdown ファイルを選択してください。",
+    "description": "Local folder placeholder document body"
   }
 }

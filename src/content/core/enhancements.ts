@@ -1,5 +1,6 @@
 // MarkCraft DOM Enhancements: Code Block Copy & Image Actions
 import type { OutlineItem } from '@/shared/types'
+import { t } from '@/shared/i18n'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -39,7 +40,7 @@ function setCopyButtonContent(btn: HTMLButtonElement, state: 'idle' | 'copied') 
   }
 
   const label = document.createElement('span')
-  label.textContent = state === 'copied' ? '已复制' : '复制'
+  label.textContent = state === 'copied' ? t('ui_copied', '已复制') : t('ui_copy', '复制')
 
   btn.appendChild(svg)
   btn.appendChild(label)
@@ -152,7 +153,7 @@ export function enhanceContentBlocks(
     try {
       const anchor = document.createElement('a')
       anchor.className = 'mdr-heading-anchor'
-      anchor.title = '复制标题链接'
+      anchor.title = t('ui_copy_heading_link', '复制标题链接')
       anchor.addEventListener('click', async (e) => {
         e.preventDefault()
         e.stopPropagation()

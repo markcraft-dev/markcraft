@@ -14,5 +14,29 @@
   "command_toggle_side": {
     "message": "Перемкнути бічну панель",
     "description": "Shortcut command: toggleSide"
+  },
+  "ui_toc_title": {
+    "message": "Зміст",
+    "description": "[TOC] block title"
+  },
+  "ui_copy": {
+    "message": "Копіювати",
+    "description": "Code block copy button label"
+  },
+  "ui_copied": {
+    "message": "Скопійовано",
+    "description": "Code block copy button label after copying"
+  },
+  "ui_copy_heading_link": {
+    "message": "Копіювати посилання на заголовок",
+    "description": "Heading anchor tooltip"
+  },
+  "ui_folder_doc_title": {
+    "message": "Вміст теки",
+    "description": "Local folder placeholder document title"
+  },
+  "ui_folder_doc_body": {
+    "message": "Виберіть файл Markdown на бічній панелі, щоб почати читання.",
+    "description": "Local folder placeholder document body"
   }
 }
