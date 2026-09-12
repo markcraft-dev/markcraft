@@ -1,9 +1,17 @@
 //! DOM 快照 → Markdown 序列化：将 JavaScript 传来的通用 DOM JSON 树
 //! 转换回标准 GFM。所有转换规则集中在此模块，JS 端只负责采集快照。
+//!
+//! 全链路无递归：`full_text`/`find_descendant` 与主序列化状态机均为
+//! 显式栈迭代实现，配合 `parse_snapshot` 的 512 层入口限深，恶意或病态
+//! 的深嵌套页面不会再触发 wasm 栈溢出（此前 debug 版约 5k 层即溢出）。
 
 use std::collections::HashMap;
 
 use serde::Deserialize;
+
+/// DOM 快照最大深度：与 JS 端 `serializeNode` 的剪枝上限一致；
+/// 超出后入口直接报错，调用方捕获后回退 JS 实现。
+pub const MAX_SNAPSHOT_DEPTH: usize = 512;
 
 /// 通用 DOM 快照节点：文本节点只有 `text`，元素节点带 `tag`/`classes`/`attrs`/`children`。
 #[derive(Deserialize, Clone, Default)]
@@ -20,6 +28,17 @@ pub struct DomNode {
     pub children: Vec<DomNode>,
 }
 
+/// 迭代式析构：默认的递归 drop 在深链（约 5k 层）上会先于序列化溢栈，
+/// 先把子孙节点搬平再逐个丢弃，深嵌套销毁同样不消耗调用栈。
+impl Drop for DomNode {
+    fn drop(&mut self) {
+        let mut stack = std::mem::take(&mut self.children);
+        while let Some(mut child) = stack.pop() {
+            stack.append(&mut child.children);
+        }
+    }
+}
+
 impl DomNode {
     fn has_class(&self, class: &str) -> bool {
         self.classes.iter().any(|c| c == class)
@@ -30,31 +49,38 @@ impl DomNode {
     }
 
     /// 等价于 `element.textContent`：按文档顺序拼接全部后代文本。
+    /// 迭代实现：深嵌套不消耗调用栈。
     fn full_text(&self) -> String {
         let mut out = String::new();
-        self.collect_text(&mut out);
+        let mut stack: Vec<&DomNode> = vec![self];
+        while let Some(node) = stack.pop() {
+            if let Some(text) = &node.text {
+                out.push_str(text);
+                continue;
+            }
+            for child in node.children.iter().rev() {
+                stack.push(child);
+            }
+        }
         out
     }
 
-    fn collect_text(&self, out: &mut String) {
-        if let Some(text) = &self.text {
-            out.push_str(text);
-            return;
-        }
-        for child in &self.children {
-            child.collect_text(out);
-        }
-    }
-
-    /// 等价于 `element.querySelector(pred)`：先序深度优先的首个匹配后代。
+    /// 等价于 `element.querySelector(pred)`：先序深度优先的首个匹配后代
+    /// （文本节点不参与匹配）。迭代实现：深嵌套不消耗调用栈。
     fn find_descendant<'a>(&'a self, pred: &dyn Fn(&DomNode) -> bool) -> Option<&'a DomNode> {
-        for child in &self.children {
+        let mut stack: Vec<&DomNode> = Vec::new();
+        for child in self.children.iter().rev() {
             if child.text.is_none() {
-                if pred(child) {
-                    return Some(child);
-                }
-                if let Some(found) = child.find_descendant(pred) {
-                    return Some(found);
+                stack.push(child);
+            }
+        }
+        while let Some(node) = stack.pop() {
+            if pred(node) {
+                return Some(node);
+            }
+            for child in node.children.iter().rev() {
+                if child.text.is_none() {
+                    stack.push(child);
                 }
             }
         }
@@ -64,7 +90,7 @@ impl DomNode {
 
 /// 入口：根元素的子节点逐一转换后整体 trim 并补一个换行（与 JS 版一致）。
 pub fn dom_to_markdown(root: &DomNode) -> String {
-    format!("{}\n", children_to_markdown(root, 0, false).trim())
+    format!("{}\n", serialize_children(root, false).trim())
 }
 
 /// 内容中最长连续反引号串的长度（用于选择不会提前闭合的围栏）。
@@ -98,35 +124,94 @@ fn mermaid_to_markdown(node: &DomNode) -> String {
     format!("\n{fence}mermaid\n{code}\n{fence}\n")
 }
 
-fn children_to_markdown(node: &DomNode, depth: usize, inside_table: bool) -> String {
-    let mut out = String::new();
-    for child in &node.children {
-        out.push_str(&node_to_markdown(child, node, depth, inside_table));
-    }
-    out
-}
-
-/// 排除首个 `markdown-alert-title` 子元素后的内容（对应 JS 版的 `titleEl.remove()`）。
-fn alert_inner_to_markdown(node: &DomNode, depth: usize, inside_table: bool) -> String {
-    let mut title_skipped = false;
-    let mut out = String::new();
-    for child in &node.children {
-        if !title_skipped && child.has_class("markdown-alert-title") {
-            title_skipped = true;
-            continue;
+/// 文本节点最小转义：`*`/`_`/`#`/`[` 恒转义，`]` 在链接文本内转义，
+/// 防止正文里的这些字符被解析为强调、标题或链接结构（JS 端 `escapeText` 同款）。
+fn escape_text(text: &str, inside_link: bool) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '*' | '_' | '#' | '[' => {
+                out.push('\\');
+                out.push(ch);
+            }
+            ']' if inside_link => {
+                out.push('\\');
+                out.push(ch);
+            }
+            _ => out.push(ch),
         }
-        out.push_str(&node_to_markdown(child, node, depth, inside_table));
     }
     out
 }
 
-fn node_to_markdown(node: &DomNode, parent: &DomNode, depth: usize, inside_table: bool) -> String {
-    if let Some(text) = &node.text {
-        return text.clone();
+/// 链接/图片地址里的括号会被当作地址终点之外的结构字符，转义为百分号编码。
+fn escape_link_url(url: &str) -> String {
+    url.replace('(', "%28").replace(')', "%29")
+}
+
+/// 序列化状态机的节点角色：决定子节点输出汇总后如何包装。
+enum Kind {
+    /// 入口帧：原样拼接子节点输出（外层由 dom_to_markdown trim）。
+    Root,
+    /// 未知标签：原样拼接子节点输出。
+    PassThrough,
+    Paragraph,
+    Heading(usize),
+    Blockquote,
+    /// 成对包裹的行内格式：strong/em/del/sub/sup/mark。
+    Wrap(&'static str, &'static str),
+    Link { href: String },
+    Alert { alert_type: &'static str },
+    /// ul/ol：按序拼接 li 条目，条目之间补换行。
+    List { ordered: bool, start: usize, next_idx: usize, emitted: bool },
+    ListItem { marker: String },
+    /// table 帧本身不直接产出字符串，等 rows 收齐后统一构表。
+    Table,
+    TableSection,
+    TableRow,
+    TableCell,
+}
+
+struct Frame<'a> {
+    node: &'a DomNode,
+    inside_table: bool,
+    inside_link: bool,
+    kind: Kind,
+    child_idx: usize,
+    /// GitHub Alert：首个 `markdown-alert-title` 子元素不计入正文。
+    title_skipped: bool,
+    /// 子节点（或条目）输出累积。
+    out: String,
+    /// TableRow：已完成的单元格文本。
+    cells: Vec<String>,
+    /// Table：已完成的行（每行为单元格文本）。
+    rows: Vec<Vec<String>>,
+}
+
+impl<'a> Frame<'a> {
+    fn new(node: &'a DomNode, inside_table: bool, inside_link: bool, kind: Kind) -> Self {
+        Frame {
+            node,
+            inside_table,
+            inside_link,
+            kind,
+            child_idx: 0,
+            title_skipped: false,
+            out: String::new(),
+            cells: Vec::new(),
+            rows: Vec::new(),
+        }
     }
+}
 
-    let tag = node.tag.as_str();
+enum Child<'a> {
+    Frame(Frame<'a>),
+    Text(String),
+    Skip,
+}
 
+/// 类名判定的叶子输出（先于 alert 判定，与原递归版顺序一致）。
+fn leaf_class_markdown(node: &DomNode, parent: &DomNode) -> Option<String> {
     // KaTeX 公式：读取 annotation 中的 TeX 源码
     if node.has_class("katex") || node.has_class("katex-display") {
         let annotation = node.find_descendant(&|n| {
@@ -134,42 +219,26 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode, depth: usize, inside_table
         });
         if let Some(annotation) = annotation {
             let tex = annotation.full_text().trim().to_string();
-            let is_display =
-                node.has_class("katex-display") || parent.has_class("katex-display");
-            return if is_display {
+            let is_display = node.has_class("katex-display") || parent.has_class("katex-display");
+            return Some(if is_display {
                 format!("\n$$\n{tex}\n$$\n")
             } else {
                 format!("${tex}$")
-            };
+            });
         }
     }
 
     // Mermaid 图：优先取 data-mermaid-source 属性
     if node.has_class("mermaid") || node.attr("data-mermaid").is_some() {
-        return mermaid_to_markdown(node);
+        return Some(mermaid_to_markdown(node));
     }
 
-    // GitHub Alerts：`> [!NOTE]` 等引用块
-    if node.has_class("markdown-alert") {
-        let alert_type = if node.has_class("markdown-alert-tip") {
-            "TIP"
-        } else if node.has_class("markdown-alert-important") {
-            "IMPORTANT"
-        } else if node.has_class("markdown-alert-warning") {
-            "WARNING"
-        } else if node.has_class("markdown-alert-caution") {
-            "CAUTION"
-        } else {
-            "NOTE"
-        };
-        let inner = alert_inner_to_markdown(node, depth, inside_table).trim().to_string();
-        let lines = inner
-            .split('\n')
-            .map(|line| format!("> {line}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        return format!("\n> [!{alert_type}]\n{lines}\n");
-    }
+    None
+}
+
+/// 标签判定的叶子输出；`pre`/行内 `code` 的内容保持原样（不做正文转义）。
+fn leaf_tag_markdown(node: &DomNode, parent: &DomNode) -> Option<String> {
+    let tag = node.tag.as_str();
 
     // 代码块
     if tag == "pre" {
@@ -179,7 +248,7 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode, depth: usize, inside_table
             n.has_class("mermaid") || n.attr("data-mermaid").is_some()
         });
         if let Some(mermaid_div) = mermaid_inside {
-            return mermaid_to_markdown(mermaid_div);
+            return Some(mermaid_to_markdown(mermaid_div));
         }
         let code_el = node
             .find_descendant(&|n| n.tag == "code")
@@ -193,7 +262,7 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode, depth: usize, inside_table
         let trimmed = raw_code.trim_end_matches('\n');
         // 内容含 ``` 时三反引号围栏会被提前闭合，按内容选择更长的围栏
         let fence = fence(longest_backtick_run(trimmed) + 1, 3);
-        return format!("\n{fence}{lang}\n{trimmed}\n{fence}\n");
+        return Some(format!("\n{fence}{lang}\n{trimmed}\n{fence}\n"));
     }
 
     // 行内代码（父元素不是 pre）
@@ -206,178 +275,278 @@ fn node_to_markdown(node: &DomNode, parent: &DomNode, depth: usize, inside_table
         } else {
             ""
         };
-        return format!("{fence}{pad}{content}{pad}{fence}");
+        return Some(format!("{fence}{pad}{content}{pad}{fence}"));
     }
 
-    // 标题
+    if tag == "img" {
+        let src = escape_link_url(node.attr("src").unwrap_or(""));
+        let alt = escape_text(node.attr("alt").unwrap_or(""), true);
+        return Some(format!("![{alt}]({src})"));
+    }
+
+    if tag == "hr" {
+        return Some("\n---\n".to_string());
+    }
+
+    if tag == "br" {
+        return Some("\n".to_string());
+    }
+
+    None
+}
+
+/// 普通子节点 → 下一动作（叶子直接产出文本，容器建帧）。
+fn normal_child<'a>(
+    child: &'a DomNode,
+    parent: &'a DomNode,
+    inside_table: bool,
+    inside_link: bool,
+) -> Child<'a> {
+    if let Some(text) = &child.text {
+        return Child::Text(escape_text(text, inside_link));
+    }
+
+    if let Some(output) = leaf_class_markdown(child, parent) {
+        return Child::Text(output);
+    }
+
+    if child.has_class("markdown-alert") {
+        let alert_type = if child.has_class("markdown-alert-tip") {
+            "TIP"
+        } else if child.has_class("markdown-alert-important") {
+            "IMPORTANT"
+        } else if child.has_class("markdown-alert-warning") {
+            "WARNING"
+        } else if child.has_class("markdown-alert-caution") {
+            "CAUTION"
+        } else {
+            "NOTE"
+        };
+        return Child::Frame(Frame::new(
+            child,
+            inside_table,
+            inside_link,
+            Kind::Alert { alert_type },
+        ));
+    }
+
+    if let Some(output) = leaf_tag_markdown(child, parent) {
+        return Child::Text(output);
+    }
+
+    let tag = child.tag.as_str();
+
+    // 标题：HTML 不存在 h7+，超范围级别收口到 h6（与 JS 回退一致），
+    // 避免产出 `#######` 这类 GFM 不认的非法 ATX 标题
     if tag.len() == 2
         && tag.starts_with('h')
         && tag.as_bytes()[1].is_ascii_digit()
         && tag != "h0"
     {
-        let level = tag.as_bytes()[1] - b'0';
-        let prefix = "#".repeat(level as usize);
-        return format!("\n{prefix} {}\n", children_to_markdown(node, depth, inside_table).trim());
+        let level = (tag.as_bytes()[1] - b'0').min(6) as usize;
+        return Child::Frame(Frame::new(child, inside_table, inside_link, Kind::Heading(level)));
     }
 
-    // 段落
     if tag == "p" {
-        return format!("\n{}\n", children_to_markdown(node, depth, inside_table).trim());
+        return Child::Frame(Frame::new(child, inside_table, inside_link, Kind::Paragraph));
     }
 
-    // 引用块
     if tag == "blockquote" {
-        let inner = children_to_markdown(node, depth, inside_table).trim().to_string();
-        let lines = inner
-            .split('\n')
-            .map(|line| format!("> {line}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        return format!("\n{lines}\n");
+        return Child::Frame(Frame::new(child, inside_table, inside_link, Kind::Blockquote));
     }
 
-    // 加粗 / 斜体 / 删除线
     if tag == "strong" || tag == "b" {
-        return format!("**{}**", children_to_markdown(node, depth, inside_table));
+        return Child::Frame(Frame::new(child, inside_table, inside_link, Kind::Wrap("**", "**")));
     }
     if tag == "em" || tag == "i" {
-        return format!("*{}*", children_to_markdown(node, depth, inside_table));
+        return Child::Frame(Frame::new(child, inside_table, inside_link, Kind::Wrap("*", "*")));
     }
     if tag == "del" || tag == "s" || tag == "strike" {
-        return format!("~~{}~~", children_to_markdown(node, depth, inside_table));
+        return Child::Frame(Frame::new(child, inside_table, inside_link, Kind::Wrap("~~", "~~")));
     }
-    // 下标 / 上标 / 高亮（markdown-it-sub/sup/mark 语法）
     if tag == "sub" {
-        return format!("~{}~", children_to_markdown(node, depth, inside_table));
+        return Child::Frame(Frame::new(child, inside_table, inside_link, Kind::Wrap("~", "~")));
     }
     if tag == "sup" {
-        return format!("^{}^", children_to_markdown(node, depth, inside_table));
+        return Child::Frame(Frame::new(child, inside_table, inside_link, Kind::Wrap("^", "^")));
     }
     if tag == "mark" {
-        return format!("=={}==", children_to_markdown(node, depth, inside_table));
+        return Child::Frame(Frame::new(child, inside_table, inside_link, Kind::Wrap("==", "==")));
     }
 
-    // 链接与图片
+    // 链接与图片：地址括号转义，链接文本内的 `]` 转义
     if tag == "a" {
-        let href = node.attr("href").unwrap_or("");
-        return format!("[{}]({})", children_to_markdown(node, depth, inside_table), href);
-    }
-    if tag == "img" {
-        let src = node.attr("src").unwrap_or("");
-        let alt = node.attr("alt").unwrap_or("");
-        return format!("![{alt}]({src})");
+        let href = escape_link_url(child.attr("href").unwrap_or(""));
+        return Child::Frame(Frame::new(
+            child,
+            inside_table,
+            true,
+            Kind::Link { href },
+        ));
     }
 
     // 无序 / 有序 / 任务列表：任务项同样按子节点序列化（保留行内格式与嵌套结构），
     // 嵌套内容按标记宽度缩进，保证往返后层级语义不变
     if tag == "ul" || tag == "ol" {
-        let start = if tag == "ol" {
-            node.attr("start")
+        let ordered = tag == "ol";
+        let start = if ordered {
+            child
+                .attr("start")
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(1)
         } else {
             1
         };
-        let items: Vec<String> = node
-            .children
-            .iter()
-            .filter(|c| c.tag == "li")
-            .enumerate()
-            .map(|(idx, li)| {
-                let task = li.find_descendant(&|n| {
-                    n.tag == "input" && n.attr("type") == Some("checkbox")
-                });
-                let marker = match task {
-                    Some(input) => format!(
-                        "- [{}] ",
-                        if input.attr("checked") == Some("true") { "x" } else { " " }
-                    ),
-                    None if tag == "ol" => format!("{}. ", start + idx),
-                    None => "- ".to_string(),
-                };
-                let inner = children_to_markdown(li, depth + 1, inside_table).trim().to_string();
-                let pad = " ".repeat(marker.len());
-                // 首行紧跟标记无需缩进，续行（嵌套列表等）按标记宽度缩进保持层级
-                let indented = inner
-                    .split('\n')
-                    .enumerate()
-                    .map(|(i, line)| {
-                        if i == 0 || line.is_empty() {
-                            line.to_string()
-                        } else {
-                            format!("{pad}{line}")
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                format!("{marker}{indented}")
-            })
-            .collect();
-        return format!("\n{}\n", items.join("\n"));
+        return Child::Frame(Frame::new(
+            child,
+            inside_table,
+            inside_link,
+            Kind::List { ordered, start, next_idx: 0, emitted: false },
+        ));
     }
 
-    // 表格
+    // 表格：嵌套表格降级为纯文本（GFM 单元格内无法承载块级表格，
+    // 递归序列化会把内层行/分隔行混入外层，破坏列结构），外层正常构表
     if tag == "table" {
         if inside_table {
-            // 嵌套表格降级为纯文本：GFM 单元格内无法承载块级表格，
-            // 递归序列化会把内层行/分隔行混入外层，破坏列结构
-            return node.full_text();
+            return Child::Text(child.full_text());
         }
-        return format!("\n{}\n", serialize_table(node));
+        return Child::Frame(Frame::new(child, inside_table, inside_link, Kind::Table));
     }
 
-    // 分隔线与换行
-    if tag == "hr" {
-        return "\n---\n".to_string();
-    }
-    if tag == "br" {
-        return "\n".to_string();
-    }
-
-    children_to_markdown(node, depth, inside_table)
+    Child::Frame(Frame::new(child, inside_table, inside_link, Kind::PassThrough))
 }
 
-fn serialize_table(table: &DomNode) -> String {
-    let mut rows: Vec<&DomNode> = Vec::new();
-    collect_direct_rows(table, &mut rows);
+/// 依据当前帧角色决定下一个子节点的去处（过滤、建帧或直接产出）。
+fn decide_child<'a>(top: &mut Frame<'a>, child: &'a DomNode) -> Child<'a> {
+    match &mut top.kind {
+        // 列表只吃 li：非 li 子节点忽略；条目间以换行分隔
+        Kind::List { ordered, start, next_idx, emitted } => {
+            if child.tag != "li" {
+                return Child::Skip;
+            }
+            let idx = *next_idx;
+            *next_idx += 1;
+            let task = child.find_descendant(&|n| {
+                n.tag == "input" && n.attr("type") == Some("checkbox")
+            });
+            let marker = match task {
+                Some(input) => format!(
+                    "- [{}] ",
+                    if input.attr("checked") == Some("true") { "x" } else { " " }
+                ),
+                None if *ordered => format!("{}. ", *start + idx),
+                None => "- ".to_string(),
+            };
+            if *emitted {
+                top.out.push('\n');
+            }
+            *emitted = true;
+            Child::Frame(Frame::new(child, top.inside_table, top.inside_link, Kind::ListItem { marker }))
+        }
+        // 表格行收集仅限直接结构（thead/tbody/tfoot > tr 或无分节的 table > tr）：
+        // 全后代收集会把嵌套表格的行误并入外层，产出结构损坏的 Markdown
+        Kind::Table => match child.tag.as_str() {
+            "thead" | "tbody" | "tfoot" => {
+                Child::Frame(Frame::new(child, top.inside_table, top.inside_link, Kind::TableSection))
+            }
+            "tr" => Child::Frame(Frame::new(child, top.inside_table, top.inside_link, Kind::TableRow)),
+            _ => Child::Skip,
+        },
+        Kind::TableSection => {
+            if child.tag == "tr" {
+                Child::Frame(Frame::new(child, top.inside_table, top.inside_link, Kind::TableRow))
+            } else {
+                Child::Skip
+            }
+        }
+        // 单元格内强制 inside_table：嵌套表格降级、列内换行折叠都依赖它
+        Kind::TableRow => {
+            if child.text.is_none() && (child.tag == "th" || child.tag == "td") {
+                Child::Frame(Frame::new(child, true, top.inside_link, Kind::TableCell))
+            } else {
+                Child::Skip
+            }
+        }
+        // GitHub Alert：跳过首个标题子元素
+        Kind::Alert { .. } => {
+            if !top.title_skipped && child.has_class("markdown-alert-title") {
+                top.title_skipped = true;
+                return Child::Skip;
+            }
+            normal_child(child, top.node, top.inside_table, top.inside_link)
+        }
+        _ => normal_child(child, top.node, top.inside_table, top.inside_link),
+    }
+}
+
+/// 帧完成：把累积的子节点输出包装为本节点输出。
+fn complete_frame(frame: Frame) -> String {
+    match frame.kind {
+        Kind::Root | Kind::PassThrough | Kind::TableSection => frame.out,
+        Kind::Paragraph => format!("\n{}\n", frame.out.trim()),
+        Kind::Heading(level) => {
+            let prefix = "#".repeat(level);
+            format!("\n{prefix} {}\n", frame.out.trim())
+        }
+        Kind::Blockquote => {
+            let lines = frame
+                .out
+                .trim()
+                .split('\n')
+                .map(|line| format!("> {line}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("\n{lines}\n")
+        }
+        Kind::Wrap(open, close) => format!("{open}{}{close}", frame.out),
+        Kind::Link { href } => format!("[{}]({})", frame.out, href),
+        Kind::Alert { alert_type } => {
+            let lines = frame
+                .out
+                .trim()
+                .split('\n')
+                .map(|line| format!("> {line}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("\n> [!{alert_type}]\n{lines}\n")
+        }
+        // 首行紧跟标记无需缩进，续行（嵌套列表等）按标记宽度缩进保持层级
+        Kind::ListItem { marker } => {
+            let inner = frame.out.trim();
+            let pad = " ".repeat(marker.len());
+            let indented = inner
+                .split('\n')
+                .enumerate()
+                .map(|(i, line)| {
+                    if i == 0 || line.is_empty() {
+                        line.to_string()
+                    } else {
+                        format!("{pad}{line}")
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("{marker}{indented}")
+        }
+        Kind::List { .. } => format!("\n{}\n", frame.out),
+        Kind::Table => format!("\n{}\n", build_table(&frame.rows)),
+        // 行/单元格在合并阶段直达 Table 帧，不会走到这里
+        Kind::TableRow | Kind::TableCell => frame.out,
+    }
+}
+
+/// 由收集好的行构表：列数补齐、表头 + 分隔行 + 表体（与原实现一致）。
+fn build_table(rows: &[Vec<String>]) -> String {
     if rows.is_empty() {
         return String::new();
     }
-
-    let mut table_data: Vec<Vec<String>> = rows
-        .iter()
-        .map(|row| {
-            // 单趟按文档序收集本行直接子级的 th/td：
-            // 先 th 后 td 的两趟收集会重排混排行，深入下钻会并入嵌套表格的单元格
-            let mut cells: Vec<&DomNode> = Vec::new();
-            for cell in &row.children {
-                if cell.text.is_none() && (cell.tag == "th" || cell.tag == "td") {
-                    cells.push(cell);
-                }
-            }
-            cells
-                .iter()
-                .map(|cell| {
-                    // 单元格保留行内格式（code/strong/em 等），GFM 表格行内不允许换行，
-                    // 将块级转换产生的换行折叠为空格；嵌套表格已降级为纯文本
-                    children_to_markdown(cell, 0, true)
-                        .trim()
-                        .split('\n')
-                        .map(str::trim)
-                        .filter(|l| !l.is_empty())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                        .replace('|', "\\|")
-                })
-                .collect()
-        })
-        .collect();
-
-    let max_cols = table_data.iter().map(Vec::len).max().unwrap_or(0);
+    let max_cols = rows.iter().map(Vec::len).max().unwrap_or(0);
     if max_cols == 0 {
         return String::new();
     }
 
+    let mut table_data = rows.to_vec();
     for row in &mut table_data {
         while row.len() < max_cols {
             row.push(String::new());
@@ -397,25 +566,234 @@ fn serialize_table(table: &DomNode) -> String {
     lines.join("\n")
 }
 
-/// 行收集仅限当前表格的直接结构（`thead/tbody/tfoot > tr` 或无分节的 `table > tr`）。
-/// 之前的全后代收集会把嵌套表格的行误并入外层，产出结构损坏的 Markdown。
-fn collect_direct_rows<'a>(table: &'a DomNode, out: &mut Vec<&'a DomNode>) {
-    for child in &table.children {
-        if child.text.is_some() {
-            continue;
+/// 单元格文本：折叠块级换行为空格（GFM 行内不允许换行）并转义管道符；
+/// 嵌套表格已降级为纯文本。
+fn render_cell(out: &str) -> String {
+    out.trim()
+        .split('\n')
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace('|', "\\|")
+}
+
+/// 主序列化状态机：显式栈先序展开、后序完成，深嵌套不消耗调用栈。
+fn serialize_children(root: &DomNode, inside_table: bool) -> String {
+    let mut final_out = String::new();
+    let mut stack: Vec<Frame> = vec![Frame::new(root, inside_table, false, Kind::Root)];
+
+    while !stack.is_empty() {
+        enum Step<'a> {
+            Push(Child<'a>),
+            Complete,
         }
-        match child.tag.as_str() {
-            "thead" | "tbody" | "tfoot" => {
-                for row in &child.children {
-                    if row.text.is_none() && row.tag == "tr" {
-                        out.push(row);
+        let step = {
+            let top = stack.last_mut().unwrap();
+            if top.child_idx >= top.node.children.len() {
+                Step::Complete
+            } else {
+                let child = &top.node.children[top.child_idx];
+                top.child_idx += 1;
+                Step::Push(decide_child(top, child))
+            }
+        };
+
+        match step {
+            Step::Push(child_action) => match child_action {
+                Child::Frame(frame) => stack.push(frame),
+                Child::Text(text) => {
+                    if let Some(top) = stack.last_mut() {
+                        top.out.push_str(&text);
+                    }
+                }
+                Child::Skip => {}
+            },
+            Step::Complete => {
+                let frame = stack.pop().unwrap();
+                match frame.kind {
+                    // 单元格文本挂到所属行
+                    Kind::TableCell => {
+                        let cell = render_cell(&frame.out);
+                        if let Some(row) = stack.last_mut() {
+                            row.cells.push(cell);
+                        }
+                    }
+                    // 行直接挂到最近的表格帧（经过 thead/tbody/tfoot 时跳过一层）
+                    Kind::TableRow => {
+                        for ancestor in stack.iter_mut().rev() {
+                            if matches!(ancestor.kind, Kind::Table) {
+                                ancestor.rows.push(frame.cells);
+                                break;
+                            }
+                        }
+                    }
+                    Kind::TableSection => {}
+                    _ => {
+                        let output = complete_frame(frame);
+                        match stack.last_mut() {
+                            Some(parent) => parent.out.push_str(&output),
+                            None => final_out = output,
+                        }
                     }
                 }
             }
-            "tr" => out.push(child),
-            _ => {}
         }
     }
+    final_out
+}
+
+#[cfg(target_arch = "wasm32")]
+/// 迭代式快照解析：从 JsValue 手工展开 DomNode 树（无递归），
+/// 深度超过 [`MAX_SNAPSHOT_DEPTH`] 直接报错走回退。
+pub fn parse_snapshot(value: &wasm_bindgen::JsValue) -> Result<DomNode, String> {
+    use js_sys::{Array, Object, Reflect};
+    use wasm_bindgen::JsValue;
+
+    fn prop(holder: &JsValue, key: &str) -> Result<JsValue, String> {
+        Reflect::get(holder, &JsValue::from_str(key))
+            .map_err(|_| format!("cannot read property {key}"))
+    }
+
+    fn missing(value: &JsValue) -> bool {
+        value.is_undefined() || value.is_null()
+    }
+
+    fn as_string(value: &JsValue, field: &str) -> Result<String, String> {
+        value
+            .as_string()
+            .ok_or_else(|| format!("field {field} must be a string"))
+    }
+
+    struct Build {
+        node: DomNode,
+        pending: Vec<JsValue>,
+        depth: usize,
+    }
+
+    fn read_element(value: &JsValue, depth: usize) -> Result<Build, String> {
+        if !value.is_object() {
+            return Err("snapshot node must be an object".to_string());
+        }
+        let text_prop = prop(value, "text")?;
+        if !missing(&text_prop) {
+            // 文本节点：只有 text 字段，无子节点
+            let text = as_string(&text_prop, "text")?;
+            return Ok(Build {
+                node: DomNode {
+                    tag: String::new(),
+                    classes: Vec::new(),
+                    attrs: HashMap::new(),
+                    text: Some(text),
+                    children: Vec::new(),
+                },
+                pending: Vec::new(),
+                depth,
+            });
+        }
+
+        let tag_prop = prop(value, "tag")?;
+        let tag = if missing(&tag_prop) {
+            String::new()
+        } else {
+            as_string(&tag_prop, "tag")?
+        };
+
+        let mut classes = Vec::new();
+        let classes_prop = prop(value, "classes")?;
+        if !missing(&classes_prop) {
+            if !classes_prop.is_array() {
+                return Err("field classes must be an array".to_string());
+            }
+            let arr = Array::from(&classes_prop);
+            for i in 0..arr.length() {
+                classes.push(as_string(&arr.get(i), "classes[]")?);
+            }
+        }
+
+        let mut attrs = HashMap::new();
+        let attrs_prop = prop(value, "attrs")?;
+        if !missing(&attrs_prop) {
+            let obj = Object::try_from(&attrs_prop)
+                .ok_or_else(|| "field attrs must be an object".to_string())?;
+            let keys = Object::keys(obj);
+            for i in 0..keys.length() {
+                let key = keys.get(i);
+                let key_str = as_string(&key, "attrs key")?;
+                let val = prop(obj.as_ref(), &key_str)?;
+                attrs.insert(key_str, as_string(&val, "attrs value")?);
+            }
+        }
+
+        let mut pending = Vec::new();
+        let children_prop = prop(value, "children")?;
+        if !missing(&children_prop) {
+            let arr = Array::try_from(children_prop)
+                .map_err(|_| "field children must be an array".to_string())?;
+            // 倒序入栈，弹出顺序即文档顺序
+            for i in (0..arr.length()).rev() {
+                pending.push(arr.get(i));
+            }
+        }
+
+        Ok(Build {
+            node: DomNode {
+                tag,
+                classes,
+                attrs,
+                text: None,
+                children: Vec::new(),
+            },
+            pending,
+            depth,
+        })
+    }
+
+    let mut stack: Vec<Build> = vec![read_element(value, 0)?];
+    loop {
+        let next_child = {
+            let top = stack.last_mut().ok_or("snapshot stack empty")?;
+            top.pending.pop()
+        };
+        match next_child {
+            Some(child_value) => {
+                let depth = stack.last().unwrap().depth + 1;
+                if depth > MAX_SNAPSHOT_DEPTH {
+                    return Err("snapshot too deep".to_string());
+                }
+                stack.push(read_element(&child_value, depth)?);
+            }
+            None => {
+                let done = stack.pop().ok_or("snapshot stack empty")?;
+                match stack.last_mut() {
+                    Some(parent) => parent.node.children.push(done.node),
+                    None => return Ok(done.node),
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// 非 wasm 目标（单测环境）走 serde 路径，解析后同样校验深度上限。
+pub fn parse_snapshot(value: &wasm_bindgen::JsValue) -> Result<DomNode, String> {
+    let root: DomNode = serde_wasm_bindgen::from_value(value.clone()).map_err(|e| e.to_string())?;
+    check_snapshot_depth(&root)?;
+    Ok(root)
+}
+
+/// 迭代式深度校验：超限报错走回退（wasm 端在解析时同步检查）。
+fn check_snapshot_depth(root: &DomNode) -> Result<(), String> {
+    let mut stack: Vec<(&DomNode, usize)> = vec![(root, 0)];
+    while let Some((node, depth)) = stack.pop() {
+        if depth > MAX_SNAPSHOT_DEPTH {
+            return Err("snapshot too deep".to_string());
+        }
+        for child in &node.children {
+            stack.push((child, depth + 1));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -426,15 +804,20 @@ mod tests {
     fn element(tag: &str, children: Vec<DomNode>) -> DomNode {
         DomNode {
             tag: tag.to_string(),
+            classes: Vec::new(),
+            attrs: HashMap::new(),
+            text: None,
             children,
-            ..Default::default()
         }
     }
 
     fn text(value: &str) -> DomNode {
         DomNode {
+            tag: String::new(),
+            classes: Vec::new(),
+            attrs: HashMap::new(),
             text: Some(value.to_string()),
-            ..Default::default()
+            children: Vec::new(),
         }
     }
 
@@ -470,6 +853,13 @@ mod tests {
             dom_to_markdown(&root),
             "# 标题\n\n第一段 **加粗** 结束\n"
         );
+    }
+
+    #[test]
+    fn caps_heading_level_at_six() {
+        // HTML 不存在 h7+；收口到 h6 与 JS 回退一致
+        let root = element("article", vec![element("h7", vec![text("x")])]);
+        assert_eq!(dom_to_markdown(&root), "###### x\n");
     }
 
     #[test]
@@ -804,5 +1194,58 @@ mod tests {
         assert!(node.attr("href").is_none());
         let _ = node.clone();
         let _ = HashMap::<String, String>::new();
+    }
+
+    #[test]
+    fn escapes_emphasis_and_structure_markers_in_text() {
+        // `]` 只在链接文本内转义；正文中闭合方括号无需转义
+        let root = element("article", vec![element("p", vec![text("a *b* _c_ #d [e]")])]);
+        assert_eq!(dom_to_markdown(&root), "a \\*b\\* \\_c\\_ \\#d \\[e]\n");
+    }
+
+    #[test]
+    fn escapes_closing_bracket_in_link_text() {
+        let link = element("a", vec![text("a]b")]).with_attr("href", "https://x.y");
+        let root = element("article", vec![element("p", vec![link])]);
+        assert_eq!(dom_to_markdown(&root), "[a\\]b](https://x.y)\n");
+    }
+
+    #[test]
+    fn escapes_closing_bracket_in_image_alt() {
+        let img = element("img", vec![])
+            .with_attr("src", "a.png")
+            .with_attr("alt", "a]b");
+        let root = element("article", vec![img]);
+        assert_eq!(dom_to_markdown(&root), "![a\\]b](a.png)\n");
+    }
+
+    #[test]
+    fn encodes_parens_in_link_and_image_urls() {
+        let root = element(
+            "article",
+            vec![
+                element("a", vec![text("t")]).with_attr("href", "f(1)"),
+                element("img", vec![]).with_attr("src", "a(1).png"),
+            ],
+        );
+        assert_eq!(dom_to_markdown(&root), "[t](f%281%29)![](a%281%29.png)\n");
+    }
+
+    #[test]
+    fn keeps_plain_text_unescaped() {
+        let root = element("article", vec![element("p", vec![text("普通 text 1.2 (x) a|b")])]);
+        assert_eq!(dom_to_markdown(&root), "普通 text 1.2 (x) a|b\n");
+    }
+
+    #[test]
+    fn handles_deeply_nested_dom_without_overflow() {
+        // 递归版在 debug 构建约 5k 层即栈溢出；迭代版 1 万层应稳定通过
+        let mut node = text("deep");
+        for _ in 0..10_000 {
+            node = element("em", vec![node]);
+        }
+        let root = element("article", vec![node]);
+        let expected = format!("{}deep{}\n", "*".repeat(10_000), "*".repeat(10_000));
+        assert_eq!(dom_to_markdown(&root), expected);
     }
 }

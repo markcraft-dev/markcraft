@@ -60,7 +60,12 @@ pub fn build_outline(headings: &[HeadingInput], max_level: i64) -> OutlineResult
 
     for (idx, heading) in headings.iter().enumerate() {
         let text = heading.text.trim();
-        let base = slugify(text);
+        // 纯符号标题（如 "!!!"）slug 为空串会产出非法 id 与 `#` 空锚点，
+        // 回退到固定前缀 `section`，去重器保证 section/section-1/… 全局唯一
+        let base = match slugify(text) {
+            base if base.is_empty() => "section".to_string(),
+            base => base,
+        };
         let slug = unique_slug(&base, &mut used_slugs);
         let level = heading.level;
         let id = idx as i64;
@@ -173,6 +178,14 @@ mod tests {
         let result = build_outline(&headings(&[("a", 1), ("a", 1), ("a-1", 1)]), 6);
         let hrefs: Vec<&str> = result.list.iter().map(|e| e.href.as_str()).collect();
         assert_eq!(hrefs, vec!["#a", "#a-1", "#a-1-1"]);
+    }
+
+    #[test]
+    fn falls_back_to_section_prefix_for_empty_slugs() {
+        // 纯符号标题的空 slug 回退为 section 前缀，不再产出非法空 id 与 # 空锚点
+        let result = build_outline(&headings(&[("!!!", 2), ("!!!", 2)]), 6);
+        let hrefs: Vec<&str> = result.list.iter().map(|e| e.href.as_str()).collect();
+        assert_eq!(hrefs, vec!["#section", "#section-1"]);
     }
 
     #[test]
