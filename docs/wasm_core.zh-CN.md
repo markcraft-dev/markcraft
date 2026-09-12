@@ -2,7 +2,8 @@
 
 MarkCraft 将手写的核心算法下沉到 Rust crate 并编译为 WebAssembly。
 JavaScript 层只保留 DOM 读取、网络与浏览器 API；所有转换规则集中在 Rust。
-每个导出函数都有行为一致的 JS 回退：WASM 缺失或加载失败时功能不降级。
+每个导出函数都有语义等价的 JS 回退（个别边界场景行内格式保真度有差异）：
+WASM 缺失或加载失败时功能不降级。
 
 ## 模块清单
 
@@ -41,6 +42,9 @@ Rust crate：`wasm/markdown_analyzer`（产物输出至 `src/content/wasm/`，
 - **导出参数禁用 `i64`**。wasm-bindgen 会把 `i64` 映射为 JS `BigInt`，
   传普通 number 会抛 `Cannot convert 6 to a BigInt`。统一用 `i32`
   （`build_outline(headings: JsValue, max_level: i32)`）。
+  结构体中的 `i64`/`u64` 字段（时间戳、文件大小等）取值必须保持在 ±2^53 内：
+  serde-wasm-bindgen 在该范围内输出 number，超出则输出 BigInt，
+  会静默破坏前端的 `number` 契约。
 - **serde 字段名必须对齐前端驼峰**。不一致会静默反序列化为默认值
   （如 `is_folder` vs 前端 `isFolder`）。`PaletteFileNode` 使用
   `#[serde(rename = "isFolder")]`，并由

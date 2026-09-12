@@ -2,8 +2,9 @@
 
 MarkCraft moves its hand-written core algorithms into a Rust crate compiled to
 WebAssembly. The JavaScript layer keeps only DOM access, network and browser
-APIs; every conversion rule lives in Rust. All exports have behavior-identical
-JS fallbacks, so the extension degrades gracefully if the WASM module is
+APIs; every conversion rule lives in Rust. All exports have semantically
+equivalent JS fallbacks (inline-formatting fidelity may differ in rare edge
+cases), so the extension degrades gracefully if the WASM module is
 missing or fails to load.
 
 ## Module inventory
@@ -43,7 +44,10 @@ Rust crate: `wasm/markdown_analyzer` (output: `src/content/wasm/`, loaded from
 
 - **No `i64` export parameters.** wasm-bindgen maps `i64` to JS `BigInt`, so a
   plain `number` argument throws `Cannot convert 6 to a BigInt`. Use `i32`.
-  (`build_outline(headings: JsValue, max_level: i32)`.)
+  (`build_outline(headings: JsValue, max_level: i32)`.) For `i64`/`u64`
+  *struct fields* (timestamps, sizes), keep values within ±2^53: serde-wasm-bindgen
+  emits a `number` inside that range and a `BigInt` beyond it, which would
+  silently break the frontend's `number` contracts.
 - **serde field names must match the frontend's camelCase.** A mismatch
   silently deserializes to defaults (e.g. `is_folder` vs the frontend's
   `isFolder`). `PaletteFileNode` uses `#[serde(rename = "isFolder")]`, guarded
