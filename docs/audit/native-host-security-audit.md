@@ -9,7 +9,9 @@
 
 **未发现 P0 / P1 级问题。** 宿主与浏览器侧链路的核心安全设计（绝对路径、只覆盖已存在文件、原子写入、`allowed_origins` 锁定扩展 ID、UTF-8 强制校验、协议帧边界处理）均正确实现并有测试覆盖。发现 **3 条 P2**（均为纵深防御 / 本机多用户场景下的健壮性缺口，需要"本地攻击者已能写目标目录"或"扩展上下文已被攻破"作为前置条件，不构成可独立利用的漏洞）与 **8 条 P3** 建议。
 
-> **处置汇总（security-reviewer，2026-09-12）：** F1、F3 已修复（`main.rs` O_EXCL 临时文件 + 显式拒绝符号链接目标，`cargo test` 7 通过）；F2 部分修复（SW 端 sender/path 绑定已随 t3-F14 落地，宿主侧白名单未做）；F4 部分修复（`sync_all` 已加，mode 复制未做）；F9 部分修复（类型校验已随 t3-F14 落地，超时断开未做）；F5/F6/F7/F8/F10/F11 不修（P3，与 t5 口径一致，理由见各条）。
+> **处置汇总（security-reviewer，2026-09-12）：** F1、F3 已修复（O_EXCL 临时文件 + 显式拒绝符号链接）；F2/F4/F9 部分修复；F5/F6/F7/F8/F10/F11 不修。
+>
+> **第二轮处置汇总（security-reviewer，2026-09-13，剩余未修项清理）：** F2 完整修复（宿主 `AllowedPaths` 白名单，缺省 Markdown 后缀 + 可选 allowed_paths.json）；F4 完整修复（mode 复制）；F5/F6/F7/F8/F9 全部修复（64MB 上限、install.sh 转义与按需写入、专用安装目录 + ID 核对提示、SW 超时断开与双侧超时放大）。F10 维持不修（Windows 暂不支持口径不变，行为安全）；F11 维持不修（保存内容为 DOM 往返再生成而非原文字节，保留原 BOM/CRLF 无实义，属产品语义决策）。`cargo test` 11 通过（新增 4 个）、`cargo clippy -D warnings` 干净。
 
 ## 2. 审计范围与文件覆盖
 
@@ -111,7 +113,8 @@
 
 ### F2 [P2] SW 中继不绑定 sender 与 path 归属 + 宿主不限制可写范围（纵深防御缺口）
 
-> **处置（security-reviewer，2026-09-12）：** 部分修复 — 建议方案 1（SW 端绑定）已随 t3-F14 落地：`src/background/index.ts` 中继前校验 `sender.id === chrome.runtime.id`、`sourceUrl` 须为 file:// 且 `path === fileUrlToNativePath(sourceUrl)`、path 须为绝对路径、content 为字符串且 ≤64M 字符（`native-save.ts` 消息新增 `sourceUrl` 字段，调色板流自然携带目标 URL，无需豁免）。宿主侧后缀/目录白名单（建议方案 2）未做：SW 端绑定已把写入面收敛到「当前正在浏览的 file:// 文档」，宿主保持通用覆盖语义，白名单留作后续可选加固。
+> **处置（security-reviewer，2026-09-12）：** 部分修复 — 建议方案 1（SW 端绑定）已随 t3-F14 落地（`sender.id`/`sourceUrl`→`path` 一致性/64M 字符上限校验）。
+> **第二轮处置（security-reviewer，2026-09-13）：已修复（完整）** — 方案 2 宿主侧白名单落地：`main.rs` 新增 `AllowedPaths` 写入门控，缺省仅放行 Markdown/文本后缀（`.md .mkd .markdown .txt .mdx .mdc`，与扩展过滤清单一致，正常保存流零影响）；可在宿主二进制同目录放 `allowed_paths.json`（`prefixes`/`suffixes`）扩展范围，配置缺失/非法时回落缺省策略（失败安全）。新增测试 `write_policy_rejects_non_markdown_targets`、`default_policy_allows_markdown_suffixes_only`、`prefix_whitelist_extends_write_scope`；README 补充配置说明。
 - 证据：`src/background/index.ts:22-41`（直接转发 `request.path`/`request.content`，未读 `sender`）；`native-host/markcraft-file-writer/src/main.rs:53-59`（仅绝对路径 + 存在性，无后缀/目录白名单）。
 - 影响：扩展任一上下文被攻破（未来代码引入的 XSS sink、被污染的消息处理等）即可覆写用户可写的任意既有文件；当前代码无这样的入口，故为 P2。
 - 建议（择一或叠加）：
@@ -127,42 +130,44 @@
 
 ### F4 [P3] 覆盖保存不保留原文件权限/属主/元数据，且无 fsync
 
-> **处置（security-reviewer，2026-09-12）：** 部分修复 — rename 前已加 `File::sync_all()`（数据先落盘再原子替换，降低崩溃丢页风险）；mode/属主/xattr 复制未做（P3 超出本次范围）。
+> **处置（security-reviewer，2026-09-12）：** 部分修复（2026-09-12）— rename 前已加 `File::sync_all()`。
+> **第二轮处置（security-reviewer，2026-09-13）：已修复（mode 复制）** — rename 前读取原文件权限并 `set_permissions` 复制到临时文件（复制失败不阻塞保存），0600 等受限文件不再被 umask 默认权限放宽；新增 unix 测试 `preserves_target_permissions_on_overwrite`。属主/xattr 保留仍不覆盖（rename 语义限制，记录为已知边界）。
 - 证据：`main.rs:69-85`——新临时文件按 umask 默认权限创建（通常 0644），`rename` 换入新 inode，原文件 mode/owner/xattr 丢失；`write` 后未 `sync_all` 即 `rename`。
 - 影响：覆盖原本 0600 的文件后权限放宽（隐私回退）；崩溃时 rename 可能先于数据落盘（ext4 auto_da_alloc / APFS 启发式可缓解，不保证）。
 - 建议：`fs::metadata(target)` 后在 rename 前对临时文件 `set_permissions` 复制原 mode；写后 `File::sync_all()`。
 
 ### F5 [P3] 512MB 入站上限与按长度头整块预分配
 
-> **处置（security-reviewer，2026-09-12）：** 不修（P3；对端仅为 Chrome，SW 侧另有 64M 字符内容上限，512MB 预分配风险可接受）。
+> **处置（security-reviewer，2026-09-12）：** 不修（2026-09-12）。**第二轮处置（security-reviewer，2026-09-13）：已修复** — 入站上限 512MB 降为 64MB（`MAX_MESSAGE_BYTES`，远超现实文档量级），顺带简化 `u32` 双重转换写法。
 - 证据：`main.rs:12`（512MB 常量）、`:22`（`vec![0u8; len]` 先分配后读取）。
 - 影响：对端（正常情况下仅 Chrome）发来大长度头即可触发最高 512MB 一次性分配；本威胁模型下风险极低。
 - 建议：将上限降到实际文档量级（如 64MB）；或先 `Vec::with_capacity` 防御性上限再流式 `read_exact`。顺带简化 `:19` 的 `len as u32` 双重转换写法以免误读（现无截断 bug）。
 
 ### F6 [P3] install.sh：JSON 内插不转义 + 无条件写全部三个浏览器目录
 
-> **处置（security-reviewer，2026-09-12）：** 不修（P3，超出本次范围；t2 口径：除 F1/F3 外其余 P3 不修）。
+> **处置（security-reviewer，2026-09-12）：** 不修（2026-09-12）。**第二轮处置（security-reviewer，2026-09-13）：已修复** — `install.sh`：① 清单 `path` 内插前对 `$BIN` 做 JSON 转义（反斜杠与双引号），特殊目录名不再产出非法清单；② 仅向已存在的浏览器清单目录写入，三个目录都不存在时回退主 Chrome 目录并显式提示。
 - 证据：`native-host/install.sh:73-81`（`$BIN` 原样内插 heredoc，路径含 `"` 或 `\` 时产出非法 JSON）；`:70-83`（对 Chrome / Chrome for Testing / Chromium 三个目录一律 `mkdir -p` 并写清单）。
 - 影响：极特殊目录名导致清单损坏、宿主不可用（安全上 failsafe）；多余目录残留。
 - 建议：用 `jq -n`/python 生成 JSON；仅当浏览器目录已存在时写入，或写后提示实际生效路径。
 
 ### F7 [P3] 宿主二进制驻留仓库 `target/` 目录，可被同机写者替换
 
-> **处置（security-reviewer，2026-09-12）：** 不修（P3，超出本次范围；前置条件「攻击者已能写仓库」下影响有限）。
+> **处置（security-reviewer，2026-09-12）：** 不修（2026-09-12）。**第二轮处置（security-reviewer，2026-09-13）：已修复** — `install.sh` 改为 `install -m 0755` 将宿主二进制安装到 `~/.local/bin/markcraft-file-writer`，清单 `path` 指向该拷贝件；仓库 `target/` 内产物被替换不再影响已安装宿主。README 同步安装/卸载说明。
 - 证据：`install.sh:33-34`（构建产物路径即清单 `path`）、`:77`（清单指向 `$BIN`）。
 - 影响：对仓库目录有写权限的本机进程可替换宿主二进制，之后每次保存以用户权限执行任意代码；与"攻击者已能写你的仓库"前提重叠，属纵深建议。
 - 建议：安装时把二进制拷贝到专用目录（如 `~/.local/bin/markcraft-file-writer`），设 0755 并校验属主，清单指向拷贝件。
 
 ### F8 [P3] allowed_origins 依赖"安装目录 == 加载目录"，路径形式敏感
 
-> **处置（security-reviewer，2026-09-12）：** 不修（P3，超出本次范围；失败模式为安全回退，仅可用性/排查成本）。
+> **处置（security-reviewer，2026-09-12）：** 不修（2026-09-12）。**第二轮处置（security-reviewer，2026-09-13）：已修复** — `install.sh` 结束时回显「核对 chrome://extensions 中扩展 ID 与清单一致」及失配症状（保存始终走弹窗）与 `--id` 重装指引；`README.md` 排查小节同步补充。
 - 证据：`install.sh:41`（`pwd -P` 物理路径）vs Chrome 以用户加载时选择的路径字符串计算未打包 ID——经符号链接路径加载扩展会得到不同 ID；`README.md:21-24` 未提示核对方法。
 - 影响：失配 ⇒ 宿主静默不可用，扩展回退对话框（安全上 failsafe，仅可用性/排查成本）。
 - 建议：脚本末尾回显"在 chrome://extensions 中核对 ID 与此处一致"；README 补充失配症状（保存始终走弹窗）与排查步骤。
 
 ### F9 [P3] SW 中继缺少入参类型校验与超时断开；超时后可能双写竞态
 
-> **处置（security-reviewer，2026-09-12）：** 部分修复 — `request.path`/`request.content`/`request.sourceUrl` 的类型与上限校验已随 t3-F14 在 SW 落地（非字符串直接拒绝）；SW 侧超时 `port.disconnect()` 未做（内容侧 4s 超时兜底保留，双写竞态内容一致、风险低，P3 不修）。
+> **处置（security-reviewer，2026-09-12）：** 部分修复（2026-09-12）— 类型校验已随 t3-F14 落地。
+> **第二轮处置（security-reviewer，2026-09-13）：已修复（完整）** — SW 侧新增超时断开：`connectNative` 后按内容长度放大超时（基础 4s + 每 1M 字符 +2s，上限 60s），超时主动 `port.disconnect()` 并响应错误，port 不再滞留；内容侧 `native-save.ts` 超时同口径放大，消除「扩展已回退弹窗、宿主迟到写入」的双写窗口。
 - 证据：`background/index.ts:41`（`request.path`/`request.content` 未校验类型即 `postMessage`，类型异常由 try/catch 兜住，无安全问题）；`:32-40`（宿主挂起时 port 保持打开，直至 SW 回收）；`native-save.ts:5,34`（4 秒超时后扩展回退对话框，而宿主可能稍后仍完成写入）。
 - 影响：超大文档下 4 秒可能不足 ⇒ 回退路径与迟到写入双写（内容一致，风险低）；port 资源滞留。
 - 建议：`typeof request.path === 'string' && typeof request.content === 'string'` 前置校验；SW 侧加超时 `port.disconnect()`；文档化超大文档场景或按内容长度放大超时。

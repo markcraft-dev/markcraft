@@ -126,7 +126,7 @@
 ### F-14 [P3] SECURITY 双语未给出具体安全联系方式
 
 > **处置（security-reviewer，2026-09-12）：** 未修（P3，不在本次 t4 修复范围 F-01..F-13/F-15/F-17 内）。
-- 位置：`SECURITY.md:3`、`SECURITY_zh.md:3`
+> **第二轮处置（security-reviewer，2026-09-13）：已修复** — `SECURITY.md` 与 `SECURITY_zh.md` 补充具体渠道：使用 GitHub Private vulnerability reporting（仓库 Security 标签页 → Report a vulnerability），或经 GitHub 组织账号私下联系。
 - 证据：仅写“通过 GitHub 组织账号或本仓库配置的安全联系方式私下联系”，全仓库无任何具体邮箱/PRIVATE vulnerability reporting 入口说明，报告者无从下手。
 - 建议修订文本：补充具体渠道，如「请使用 GitHub 的 Private vulnerability reporting（Security 标签页 → Report a vulnerability）或邮件 security@<域名>」。
 
@@ -140,7 +140,7 @@
 ### F-16 [P3] rendering_review 参考链接使用 http
 
 > **处置（security-reviewer，2026-09-12）：** 未修（P3，不在本次 t4 修复范围 F-01..F-13/F-15/F-17 内）。
-- 位置：`docs/rendering_review.zh-CN.md:46`（`http://theme.typora.io/`）
+> **第二轮处置（security-reviewer，2026-09-13）：已修复** — `docs/rendering_review.zh-CN.md` 参考链接改为 `https://theme.typora.io/`。
 - 证据：链接可用（本次探测 200），但站点支持 https，正式文档应统一 https。
 - 建议修订文本：改为 `https://theme.typora.io/`。
 

@@ -157,50 +157,42 @@
 ### F16. 运行时 UI 完全未接入 i18n；`shared/i18n.ts` 为死代码
 
 > **处置（fix-engineer，2026-09-12）：** 未修（P3，超出本次范围）。
-- 证据：`src/shared/i18n.ts` 无任何引用；App.vue、enhancements.ts（‘复制’/‘已复制’/‘复制标题链接’）、index.ts:79（‘文件夹目录…’）、markdown.ts:35（‘目录’）等 UI 文案硬编码中文；export.ts:72 `lang="zh-CN"` 写死。manifest 侧 `_locales` 8 种语言 key 一致性已核验通过（均含 `ext_name/ext_desc/command_toggle_*` 6 键，无缺失无多余）。
-- 建议：以 `shared/i18n.ts` 为入口接入 `chrome.i18n`，UI 文案迁移至 messages.json。
+> **第二轮处置（security-reviewer，2026-09-13）：部分落地（基建 + 内容脚本 UI 全量）** — ① 8 个语言包新增 `ui_toc_title/ui_copy/ui_copied/ui_copy_heading_link/ui_folder_doc_title/ui_folder_doc_body` 6 键（含英/英式/日/韩/乌/简中/繁中翻译）；② `shared/i18n.ts` 的 `t()` 接入全部内容脚本注入 UI：markdown.ts [TOC] 标题、enhancements.ts 复制按钮两态与标题锚点提示、content/index.ts 目录占位文档；③ `export.ts` 导出 HTML 的 `lang` 改为跟随 `document.documentElement.lang || navigator.language`（不再写死 zh-CN）。**残余**：Vue SFC 组件（SettingsModal/TopHeader/RightSidebar 等）约 150 处界面文案仍为中文默认文案，迁移涉及组件模板重构与翻译审校，留专项；处置级别由「未修」改为「部分落地」。
 
 ### F17. 本地目录树依赖 SW fetch file://，受「允许访问文件网址」开关制约且无用户提示
 
 > **处置（fix-engineer，2026-09-12）：** 未修（P3，超出本次范围）。
-- 证据：`src/content/core/folder.ts:16-25` 经 `bg-fetch` 由 SW `fetch(url)`；`src/background/index.ts:4-20` 无 file:// 特殊处理。MV3 SW fetch file:// 在新版 Chrome 可用但需用户在扩展详情开启文件访问权限；未开启时 `hasMarkdownContent` 全部返回 false，子目录被静默剪掉（folder.ts:100-153），用户看到的是「空目录」而非报错。
-- 建议：检测权限未开启时展示引导提示；`fetchDirectory` 对空结果与失败状态区分展示。
+> **第二轮处置（security-reviewer，2026-09-13）：已修复（功能层）** — `folder.ts`：新增 `directoryReadFailed` 状态跟踪与 `hasDirectoryReadFailure()` 导出（空目录与失败状态可区分）；读取失败时一次性 `console.warn` 引导用户开启「允许访问文件网址」；`sendMessage` 增加 try/catch（扩展上下文失效按失败处理而非 unhandledrejection）并吞噬 `lastError`、失败即时清缓存。**残余**：Side 树面板内的可视化错误横幅留专项（状态 API 已就绪）。
 
 ### F18. 目录 HTML 请求缓存与错误路径的小问题
 
 > **处置（fix-engineer，2026-09-12）：** 未修（P3，超出本次范围）。
-- 证据：`src/content/core/folder.ts:16-26` — `chrome.runtime.sendMessage` 同步抛错（扩展上下文失效）时 Promise 直接 reject 且 `directoryHtmlCache` 未清理，产生 unhandledrejection；过期缓存命中后最多 30s 才恢复。`fetchDirectoryHtml` 对 `res?.ok` 之外未记录 `chrome.runtime.lastError`。
-- 建议：executor 内 try/catch 后 `resolve('')`；读取并吞噬 `lastError`。
+> **第二轮处置（security-reviewer，2026-09-13）：已修复** — executor 内 try/catch 后 `resolve('')`；回调内 `void chrome.runtime.lastError` 吞噬；失败条目即时从 `directoryHtmlCache` 删除（原逻辑已有，配合失败路径保持生效），不再产生 unhandledrejection。
 
 ### F19. doc-stats 回退实现把所有语言的字符数当词数
 
 > **处置（fix-engineer，2026-09-12）：** 未修（P3，超出本次范围）。
-- 证据：`src/content/core/doc-stats.ts:10-14` — `words = clean.length`（含英文在内一律按字符计），400 字/分钟仅适用 CJK；英文文档阅读时长会被高估约 5 倍，与 WASM 版口径（注释声称一致）不符。
-- 建议：按 CJK 字符 + 拉丁词分词统计；或直接去掉回退注释中的「口径一致」表述。
+> **第二轮处置（security-reviewer，2026-09-13）：已修复（双侧同步）** — Rust `stats.rs` 与 JS 回退统一改为「CJK 字符按字计（含中日韩标点/假名/谚文），其余连续非空白串按词计」，阅读时长 400 词/分钟对两类文档均不再系统性偏差；成对新增/更新测试（`counts_cjk_chars_and_latin_words`、`reading_time_is_at_least_one_minute` 扩展英文断言），双侧口径保持逐字一致。
 
 ### F20. 大纲 slug 可生成空串与非法 id
 
 > **处置（fix-engineer，2026-09-12）：** 未修（P3，超出本次范围；slug 空串行为 Rust/JS 双侧一致）。
-- 证据：`src/content/core/outline.ts:12-21` — 纯符号标题（如 `!!!`）slug 为 `''`，`href='#'` 且 `setAttribute('id','')` 非法；连续此类标题得到 `-1`、`-2`。
-- 建议：空 slug 时回退为 `section`/`heading-{idx}` 等安全前缀。
+> **第二轮处置（security-reviewer，2026-09-13）：已修复（双侧同步）** — 空 slug 回退固定前缀 `section`（去重器产出 `section`/`section-1`/…），href 与标题 `id` 不再出现空串非法值；Rust `build_outline` + JS `generateSlug` 成对落地，新增测试 `falls_back_to_section_prefix_for_empty_slugs`。
 
 ### F21. content/index.ts 接管行为细节
 
 > **处置（fix-engineer，2026-09-12）：** 未修（P3，超出本次范围）。
-- 证据：`src/content/index.ts:69` — 对远程站点也会 `document.body.classList.add('mdr','mdr-pre')`，与宿主页样式存在类名冲突风险；`index.ts:44,59-65` — 本地目录名含 `.`（如 `v1.2`）时被误判为文件而跳过；`index.ts:46,74-77` — 取**第一个** `<pre>` 作正文，text/plain 页含多个 pre 时内容不完整。
-- 建议：类名统一 `mdr-` 前缀；目录判定放宽为「无扩展名即目录」；正文拼接全部 `<pre>`。
+> **第二轮处置（security-reviewer，2026-09-13）：部分落地（2/3）** — ① 目录误判修复：目录识别增加「页面含 addRow 的 Chrome 本地目录列表」信号，`v1.2` 这类含点目录不再被误判为文件，扩展名复核也只对文件执行；② 多 `<pre>`：正文改为全部 `<pre>` 的 `innerText` 以空行拼接，text/plain 分段内容不再丢失。③ **类名前缀不修（评估结论）**：`mdr` 类名被 `markdown.css` 与构建期压缩的 `style.css` 大面积引用（`body.mdr`、`.mdr` 选择器），改名需源样式与压缩产物双端同步且牵动主题样式，而接管页面本身极少出现同名类冲突（接管条件限定为本地 md/目录与 text/plain），收益低于风险。
 
 ### F22. 主题模块缺 prefers-color-scheme 变更监听与类型收窄
 
 > **处置（fix-engineer，2026-09-12）：** 未修（P3，超出本次范围）。
-- 证据：`src/content/core/theme.ts:5-9` — `auto` 仅在调用时求值一次，系统深浅切换后不跟随（须等下一次 applyTheme）；`src/content/App.vue:150` — `currentTheme` 类型缺 `verdant|dracula`，与 `settings.pageTheme`（types.ts:32）不一致，靠 Vite 不做类型检查才未报错。
-- 建议：`auto` 时挂 `matchMedia('(prefers-color-scheme: dark)')` change 监听；统一使用 `PageTheme` 类型。
+> **第二轮处置（security-reviewer，2026-09-13）：已修复** — ① `theme.ts`：`auto` 时挂 `matchMedia('(prefers-color-scheme: dark)')` 的 change 监听（模块级只挂一次，旧 Safari `addListener` 兼容），系统深浅切换实时重算应用；② `types.ts` 抽出命名类型 `PageTheme` 并在 `UserSettings`/`AppState`/`App.vue` 的 `currentTheme` 统一使用，`verdant|dracula` 不再缺席。
 
 ### F23. 构建脚本与 sourcemap
 
 > **处置（fix-engineer，2026-09-12）：** 未修（P3，超出本次范围）。
-- 证据：`scripts/build.mjs` 全程未配置 `build.sourcemap`（产物无 map）；`157-163` 的 `toAscii` 后处理还会使任何 map 失效；内容脚本 CSS 产物名 `content/style.css` 由 Vite 隐式决定（已核验 dist/content/style.css 存在且与 manifest:51 匹配），build.mjs 未显式控制该文件名，Vite 升级改名即导致扩展样式 404；`watch` 模式 `runBuild()` 递归调用未 await（180-186 行，可接受但有未捕获异常风险）。
-- 建议：显式声明 CSS 输出文件名（或在构建后校验 manifest 引用的每个文件存在）；如需排查线上问题，为 popup/options 生成 hidden sourcemap（内容脚本可暂缓）；`watch` 分支补 `void runBuild().catch(...)`。
+> **第二轮处置（security-reviewer，2026-09-13）：已修复（校验路线）** — 按建议采用「构建后校验」：build.mjs 新增 `verifyManifestReferences()`，对 manifest 引用的 content_scripts js/css、web_accessible_resources（支持 `*` 通配）、icons、popup/options 页面、service worker、`default_locale` 语言包逐一核对 dist 内存在性，Vite 升级改名当场构建失败而非运行时 404；watch 分支补 `void runBuild().catch(...)`。sourcemap 决策留痕于 build.mjs 注释（不生成：产物体积与源码暴露考量，且 toAscii 后处理会使 map 失效；排查用本地 dev 构建）
 
 ---
 

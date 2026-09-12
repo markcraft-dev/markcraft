@@ -43,6 +43,6 @@
 ## 参考
 
 - [GFM Spec](https://github.github.com/gfm/) · [GitHub 基础写法](https://docs.github.com/github/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax)
-- [Typora 官方主题库](http://theme.typora.io/) · [VLOOK](https://madmaxchow.github.io/VLOOK/)
+- [Typora 官方主题库](https://theme.typora.io/) · [VLOOK](https://madmaxchow.github.io/VLOOK/)
 - [mdit-plugins 套件](https://mdit-plugins.github.io/) · [markdown-it-katex](https://github.com/waylonflinn/markdown-it-katex)
 - [Dracula 规范](https://draculatheme.com/spec) · [Nord 官方](https://www.nordtheme.com/)

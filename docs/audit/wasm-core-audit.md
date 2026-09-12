@@ -64,7 +64,8 @@ serde-wasm-bindgen 0.6.5 ser.rs:324–367 核实：i64/u64 在 ±2^53 内序列�
 
 ### P2-3 超深 DOM 嵌套触发递归爆栈（WASM trap）
 
-> **处置（security-reviewer，2026-09-12）：** 部分修复（与 t5 口径一致）— 快照端 `serializeNode` 已加 512 层深度上限（`dom-to-markdown.ts:25,43-46`，t3-F5 落地）；Rust 侧显式栈迭代化与入口限深未做。不修理由：调用方全部 try/catch 回退，深 DOM 场景 WASM trap 被捕获后走 JS 回退，而回退自身已有 512 限深保护，链路整体优雅失败不崩溃；迭代化属结构性重构，留后续专项。
+> **处置（security-reviewer，2026-09-12）：** 部分修复（与 t5 口径一致）— 快照端 `serializeNode` 已加 512 层深度上限（`dom-to-markdown.ts:25,43-46`，t3-F5 落地）。
+> **第二轮处置（security-reviewer，2026-09-13）：已修复（完整）** — Rust 侧全链路去递归：`dommd.rs` 主序列化重写为显式栈状态机（`full_text`/`find_descendant` 同改迭代，`DomNode` 增加迭代式 `Drop` 防销毁溢栈）；wasm 入口新增 `parse_snapshot` 迭代式 JsValue 解析并强制 512 层上限（超限报错走回退，与快照端剪枝对齐）。新增测试 `handles_deeply_nested_dom_without_overflow`（1 万层嵌套稳定通过，递归版 debug 约 5k 层即溢出）。`cargo test` 55 通过。
 - 位置：`wasm/markdown_analyzer/src/dommd.rs`（`collect_text`/`find_descendant`/`node_to_markdown`/`children_to_markdown`/`Drop` 全部递归，行 33-62、79-296）；反序列化路径 `lib.rs:68-71`（serde_wasm_bindgen 解析 `DomNode` 亦按深度递归）
 - 证据：探针 9 实证原生 debug depth≈5k 即栈溢出、release（8MB 栈）在 60k–80k 之间溢出；wasm32 默认栈更小（约 1MB 量级），阈值相应更低，溢出表现为 `RuntimeError: call stack exhausted`。恶意/病态页面可造出任意深 DOM。各调用方 try/catch 后回落 JS 实现，但 JS 回退（`serializeNode`、`nodeToMarkdown`）同为递归，深到一定程度照样抛错——扩展功能在该页面上失效（内容脚本异常，不崩浏览器，无数据破坏，故 P2）。
 - 建议：`children_to_markdown`/`collect_text` 改显式栈迭代；`DomNode` 序列化入口加深度上限（如 512，超出直接报错走回退）；快照端 `serializeNode` 同步限深，给两条路径统一保护。
@@ -87,7 +88,7 @@ serde-wasm-bindgen 0.6.5 ser.rs:324–367 核实：i64/u64 在 ±2^53 内序列�
 
 ### P3-1 h7–h9 产出非法 ATX 标题
 
-> **处置（security-reviewer，2026-09-12）：** 未修（P3，超出本次范围；HTML 不存在 h7+，健壮性建议保留）。
+> **处置（security-reviewer，2026-09-12）：** 未修（2026-09-12）。**第二轮处置（security-reviewer，2026-09-13）：已修复** — Rust 端 `level.min(6)` 收口（测试 `caps_heading_level_at_six`）；JS 回退正则同步 `/^h[1-9]$/` + `min(level,6)`，双实现分歧消除。
 - 位置：`wasm/markdown_analyzer/src/dommd.rs:184-191`；证据：探针 5，`h7` → `####### x`（GFM 中 >6 个 `#` 不是标题）。HTML 实际不存在 h7+，仅健壮性。JS 回退用 `/^h[1-6]$/`（`dom-to-markdown.ts:142`）行为更严——存在轻微双实现分歧。建议 Rust 端 `level.min(6)` 收口并对齐回退。
 
 ### P3-2 任务列表项用 `full_text()`，丢失行内格式与嵌套列表结构
@@ -97,37 +98,39 @@ serde-wasm-bindgen 0.6.5 ser.rs:324–367 核实：i64/u64 在 ±2^53 内序列�
 
 ### P3-3 行内代码 / 链接 / 图片不做最小转义
 
-> **处置（security-reviewer，2026-09-12）：** 部分修复 — 行内代码围栏已按内容反引号数加长（随 P2-2 的 `fence(longest_backtick_run+1, 1)` + CommonMark 补空格）；文本节点 `*`/`_`、链接 `]`/`)`、URL 括号转义仍未做（双侧一致缺口，与 t3-F5 口径一致，留双侧同步专项）。
+> **处置（security-reviewer，2026-09-12）：** 部分修复（2026-09-12）— 行内代码围栏已按内容反引号数加长（随 P2-2）。
+> **第二轮处置（security-reviewer，2026-09-13）：已修复（完整）** — 文本节点最小转义 `*`/`_`/`#`/`[`（链接文本内追加 `]`），链接/图片地址括号转义为 `%28`/`%29`、alt 内 `]` 转义；`dom-to-markdown.ts` 以 `escapeText`/`escapeLinkUrl` + `insideLink` 线程成对落地，双侧逐字符一致。新增测试 `escapes_emphasis_and_structure_markers_in_text`、`escapes_closing_bracket_in_link_text`、`escapes_closing_bracket_in_image_alt`、`encodes_parens_in_link_and_image_urls`、`keeps_plain_text_unescaped`。
 - 位置：`wasm/markdown_analyzer/src/dommd.rs:179-181`（行内代码不加长围栏）、`232-240`（`href` 含 `)`、`alt` 含 `]` 时输出断链）。均为回环保真缺口且与 JS 回退一致；建议行内代码按内容反引号数选围栏、URL 括号做 `%28%29` 或尖括号包裹。
 
 ### P3-4 `read_number` 混合符号串整体解析失败归 0
 
-> **处置（security-reviewer，2026-09-12）：** 未修（P3，超出本次范围；仅边界输入下的解析保守回退，无数据损坏）。
+> **处置（security-reviewer，2026-09-12）：** 未修（2026-09-12）。**第二轮处置（security-reviewer，2026-09-13）：已修复** — `read_number` 收集循环只允许首位负号，`12-34` 保留合法前缀 `12`（测试 `keeps_valid_prefix_of_mixed_sign_numbers`）。
 - 位置：`wasm/markdown_analyzer/src/directory.rs:52-69`；证据：探针 7，`12-34` → 0。负号被当作数字字符参与收集后 `parse` 失败。建议第二段循环遇 `-` 即停（只允许首字符负号），畸形串至少不吞合法前缀。
 
 ### P3-5 `slugify` 尾部 `trim_matches(' ')` 为死代码
 
-> **处置（security-reviewer，2026-09-12）：** 未修（P3，超出本次范围；JS/Rust 双侧一致行为，有测试锁定）。
+> **处置（security-reviewer，2026-09-12）：** 未修（2026-09-12）。**第二轮处置（security-reviewer，2026-09-13）：已修复** — 死代码 `trim_matches(' ')` 改为 GitHub 式 `trim_matches('-')`（修剪首尾连字符，中间连续连字符保留），测试更新为 `trim--me`；JS `generateSlug` 以 `replace(/^[-]+|[-]+$/g, '')` 同步。
 - 位置：`wasm/markdown_analyzer/src/slug.rs:39`。空格在过滤循环里已先转为 `-`，trim 永不生效（测试 `slugify("  Trim  Me  ") == "--trim--me--"` 锁定了该行为，JS 回退 `outline.ts:14` 的 `.trim()` 同为 no-op，双方一致）。若意图是修剪首尾连字符（GitHub 行为），当前实现未达成；建议要么删除死代码、要么改为 `trim_matches('-')` 并同步回退与测试。
 
 ### P3-6 palette 输入字段名拼错时静默取默认值
 
-> **处置（security-reviewer，2026-09-12）：** 未修（P3，超出本次范围；风险已在 docs/wasm_core.md 记载）。
+> **处置（security-reviewer，2026-09-12）：** 未修（2026-09-12）。**第二轮处置（security-reviewer，2026-09-13）：已修复** — 按建议补齐关键字段回归用例：`deserializes_heading_entry_fields` 锁定标题条目 `id/href/content/level`（既有 `deserializes_camel_case_tree_nodes` 覆盖文件树节点）。
 - 位置：`wasm/markdown_analyzer/src/palette.rs:10-33`。所有字段 `#[serde(default)]`，且只有 `isFolder` 做了 rename 与回归测试（`palette.rs:209-217`）；`content`/`href` 若与前端类型漂移将静默产出空标题条目。`docs/wasm_core.md:47-50` 已如实记载该风险。建议对关键字段补齐回归用例，或对文件树结构体加 `deny_unknown_fields` 的镜像结构做调试断言。
 
 ### P3-7 palette 空查询仍全量扁平化 + 逐条 `to_lowercase` 分配
 
-> **处置（security-reviewer，2026-09-12）：** 未修（P3，超出本次范围；性能优化建议，无正确性影响）。
+> **处置（security-reviewer，2026-09-12）：** 未修（2026-09-12）。**第二轮处置（security-reviewer，2026-09-13）：已修复（主要项）** — 空查询改为惰性展开（显式栈 + 凑满 12 条即停），不再全量扁平化大树；过滤阶段保留 `to_lowercase` 口径以与 JS 回退逐字一致（ASCII 不敏感比较会引入非 ASCII 大小写分歧）。
 - 位置：`wasm/markdown_analyzer/src/palette.rs:93-112`。空查询只需前 12 条却先展开整棵树；过滤阶段对每个候选做 `title/sub_path` 小写分配，大树上每次击键都是 O(n) 分配。JS 回退同构。建议空查询走惰性展开（凑满 12 即止），过滤可先做 `contains` 的大小写不敏感比较或缓存小写副本。
 
 ### P3-8 JS 回退与 WASM 的表格序列化不同构，"行为完全一致的回退"声明过强
 
 > **处置（security-reviewer，2026-09-12）：** 代码分歧已大幅收敛（回退单元格保行内格式、转义 `|`、折叠换行、嵌套表格降级、行收集限直接结构——t3-F5；本批 Rust 侧同步落地）；`docs/wasm_core.md` 的措辞收敛未做（P3 不修，留后续文档批处理）。
+> **第二轮处置（security-reviewer，2026-09-13）：已修复** — `docs/wasm_core.md` 与中文版措辞收敛为「语义等价，行内格式保真度有差异」；目录回退正则严格度的残余分歧已在两份 wasm_core 文档的回退章节如实记载（如页面仍标注）。
 - 位置：`src/content/core/dom-to-markdown.ts:235-259` vs `wasm/markdown_analyzer/src/dommd.rs:298-352`。回退单元格仅取 `textContent`（丢失 `` `code` ``/`**粗体**`，`dom-to-markdown.ts:242`），也不折叠单元格内换行（换行会破坏 GFM 行）；Rust 版保留行内格式并折叠换行（`dommd.rs:314-325`）。`docs/wasm_core.md:5-7` 声称 "behavior-identical JS fallbacks"，此处理由不符。建议对齐回退实现或在文档收敛措辞（"语义等价，行内格式保真度有差异"）。同类小分歧：回退 `pre` 不处理 `pre` 内嵌 mermaid 容器（Rust `dommd.rs:156-161` 有）；回退正则 `parseDirectoryFallback`（`wasm_directory.ts:16`）要求 size_unit 匹配 `[\d.]+ [BkMG]B?` 且以 `);` 结尾、不支持转义引号/负数，比 Rust 词法（`directory.rs:25-120`）严格，畸形页面上两者条目数会不同。
 
 ### P3-9 i64/u64 超出安全整数范围时序列化为 BigInt
 
-> **处置（security-reviewer，2026-09-12）：** 未修（P3，超出本次范围；当前现实取值远低于 2^53，契约成立）。
+> **处置（security-reviewer，2026-09-12）：** 未修（2026-09-12）。**第二轮处置（security-reviewer，2026-09-13）：已修复** — 按建议在 `docs/wasm_core.md` 双语 i32 约束条目旁补「i64/u64 字段取值须保持 ±2^53 内，超出序列化为 BigInt 破坏 number 契约」。
 - 位置：`directory.rs:13/15`（`size:u64`/`timestamp:i64`）、`outline.rs:19-26`、`palette.rs:26`、`stats.rs:7`；已核实 serde-wasm-bindgen 0.6.5 在 ±2^53 内输出 number，超出输出 BigInt。当前所有现实取值（秒级时间戳、文件大小、字数）远低于阈值，TS 侧 `number` 契约成立；仅提示：若未来把时间戳换成纳秒/微秒，`ParsedDirectoryItem.timestamp:number`（`wasm_directory.ts:9`）等契约会静默变成 BigInt。建议在 `docs/wasm_core.md` 的 i32 约束条目旁补一句"i64 字段须保持 <2^53"。
 
 ### P3-10 每次调用前 `await wasm.default()` 的冗余异步跳
@@ -159,3 +162,5 @@ serde-wasm-bindgen 0.6.5 ser.rs:324–367 核实：i64/u64 在 ±2^53 内序列�
 P0×0，P1×1，P2×4（P2-5 为 P1-1 关联条目），P3×10。最高优先修复：P1-1（表格收集越界下钻）与 P2-1/P2-2（slug 去重、围栏选择），三者都有可复现探针且需 Rust/JS 回退双侧同步修。
 
 > **处置汇总（security-reviewer，2026-09-12）：** P1-1、P2-1、P2-2、P2-4、P2-5、P3-2 已修复（Rust 落地 + JS 镜像同步，`cargo test` 45 通过、含新增 8 个边界测试）；P2-3 部分修复（快照端 512 限深已落地，Rust 迭代化留后续）；P3-3 部分修复（行内代码围栏）；P3-10 已随 t3-F4 修复；P3-1/4/5/6/7/8/9 未修（P3 超出本次范围，理由见各条）。JS 镜像改动仅限授权文件 `src/content/core/outline.ts`、`src/content/core/folder.ts`（dom-to-markdown.ts 为 t3-F5 已有修复，未动）。
+>
+> **第二轮处置汇总（security-reviewer，2026-09-13，剩余未修项清理）：** 本报告全部 15 条 findings 均已闭环——P2-3 完整修复（序列化状态机/full_text/find_descendant/Drop 全迭代化 + wasm 入口迭代解析 512 限深，1 万层测试通过）；P3-1/3/4/5/6/7/8/9 全部按建议修复（转义与 URL 括号双侧成对落地、标题级别收口、read_number 前缀保留、slug 首尾连字符修剪、palette 字段回归用例、空查询惰性展开、wasm_core 双语措辞与 i64 注记）。`cargo test` 55 通过（新增 10 个）、`cargo clippy -D warnings` 干净、wasm-pack 构建通过。
