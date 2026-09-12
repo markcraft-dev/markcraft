@@ -5,22 +5,23 @@
 //! 响应：{"ok": true} 或 {"ok": false, "error": "..."}
 //!
 //! 安全约束：仅接受绝对路径，且目标文件必须已存在——只覆盖、绝不新建；
-//! 显式拒绝符号链接目标；临时文件以 O_EXCL 独占创建，不跟随符号链接。
+//! 显式拒绝符号链接目标；缺省仅放行 Markdown/文本后缀（可用宿主同目录
+//! allowed_paths.json 扩展白名单）；临时文件以 O_EXCL 独占创建，不跟随符号链接。
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-const MAX_MESSAGE_BYTES: u32 = 512 * 1024 * 1024;
+const MAX_MESSAGE_BYTES: u32 = 64 * 1024 * 1024;
 
 /// 读取一条 Native Messaging 帧；stdin 关闭（EOF）或帧非法时返回 None。
 fn read_message(reader: &mut impl Read) -> Option<Vec<u8>> {
     let mut len_buf = [0u8; 4];
     reader.read_exact(&mut len_buf).ok()?;
-    let len = u32::from_le_bytes(len_buf) as usize;
-    if len as u32 > MAX_MESSAGE_BYTES {
+    let len = u32::from_le_bytes(len_buf);
+    if len > MAX_MESSAGE_BYTES {
         return None;
     }
-    let mut buf = vec![0u8; len];
+    let mut buf = vec![0u8; len as usize];
     reader.read_exact(&mut buf).ok()?;
     Some(buf)
 }
@@ -66,10 +67,82 @@ pub fn handle_request(bytes: &[u8]) -> serde_json::Value {
             return error_response("target is a symlink; refusing to replace");
         }
     }
+    // 写入门控（纵深防御）：缺省仅放行 Markdown/文本后缀，杜绝扩展上下文
+    // 被攻破后覆写 ~/.zshrc 等任意既有文件；需要更宽时可配置 allowed_paths.json
+    let allowed = AllowedPaths::load();
+    if !allowed.allows(target) {
+        return error_response("target not allowed by write policy (allowed_paths.json)");
+    }
     // 原子替换：先写同目录临时文件再 rename，避免中途失败损坏原文件
     match atomic_write(target, content) {
         Ok(()) => serde_json::json!({ "ok": true }),
         Err(e) => error_response(&e),
+    }
+}
+
+/// 写入策略：前缀或后缀命中即放行。缺省后缀白名单与扩展侧的 Markdown
+/// 过滤清单一致，正常保存流不受影响。
+struct AllowedPaths {
+    prefixes: Vec<String>,
+    suffixes: Vec<String>,
+}
+
+impl AllowedPaths {
+    fn default_suffixes() -> Vec<String> {
+        [".md", ".mkd", ".markdown", ".txt", ".mdx", ".mdc"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    }
+
+    /// 从宿主可执行文件同目录的 allowed_paths.json 读取可选配置：
+    /// {"prefixes": ["/abs/dir/"], "suffixes": [".md"]}。
+    /// 缺失或解析失败时使用缺省策略（失败安全）。
+    fn load() -> Self {
+        let mut config = AllowedPaths { prefixes: Vec::new(), suffixes: Self::default_suffixes() };
+        let Ok(exe) = std::env::current_exe() else {
+            return config;
+        };
+        let Some(dir) = exe.parent() else {
+            return config;
+        };
+        let Ok(raw) = std::fs::read_to_string(dir.join("allowed_paths.json")) else {
+            return config;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+            return config;
+        };
+        if let Some(entries) = value.get("prefixes").and_then(|v| v.as_array()) {
+            config.prefixes = entries
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect();
+        }
+        if let Some(entries) = value.get("suffixes").and_then(|v| v.as_array()) {
+            let suffixes: Vec<String> = entries
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect();
+            if !suffixes.is_empty() {
+                config.suffixes = suffixes;
+            }
+        }
+        config
+    }
+
+    fn allows(&self, target: &Path) -> bool {
+        let path = target.to_string_lossy();
+        if self
+            .prefixes
+            .iter()
+            .any(|prefix| !prefix.is_empty() && path.starts_with(prefix.as_str()))
+        {
+            return true;
+        }
+        let lower = path.to_lowercase();
+        self.suffixes
+            .iter()
+            .any(|suffix| !suffix.is_empty() && lower.ends_with(&suffix.to_lowercase()))
     }
 }
 
@@ -118,6 +191,13 @@ fn atomic_write(target: &Path, content: &str) -> Result<(), String> {
         .write_all(content.as_bytes())
         .and_then(|()| file.sync_all());
     drop(file);
+    // 复制原文件权限后再换入：否则覆盖 0600 等受限文件会被 umask 默认
+    // 权限（通常 0644）放宽，造成隐私回退；复制失败不阻塞保存
+    if write_result.is_ok() {
+        if let Ok(meta) = std::fs::metadata(target) {
+            let _ = std::fs::set_permissions(&tmp, meta.permissions());
+        }
+    }
     let rename_result = match write_result {
         Err(e) => Err(e),
         Ok(()) => std::fs::rename(&tmp, target),
@@ -140,8 +220,8 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{error_response, handle_request};
-    use std::path::PathBuf;
+    use super::{error_response, handle_request, AllowedPaths};
+    use std::path::{Path, PathBuf};
 
     fn temp_markdown_path(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join("markcraft-file-writer-tests");
@@ -207,6 +287,55 @@ mod tests {
     }
 
     #[test]
+    fn write_policy_rejects_non_markdown_targets() {
+        let path = temp_markdown_path("no-extension-target");
+        std::fs::write(&path, "old").unwrap();
+
+        let request = serde_json::json!({ "path": path.to_str().unwrap(), "content": "x" });
+        let response = handle_request(request.to_string().as_bytes());
+        assert_eq!(response["ok"], serde_json::json!(false));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "old", "目标内容不得被改动");
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn default_policy_allows_markdown_suffixes_only() {
+        let policy = AllowedPaths { prefixes: Vec::new(), suffixes: AllowedPaths::default_suffixes() };
+        assert!(policy.allows(Path::new("/Users/x/notes/a.md")));
+        assert!(policy.allows(Path::new("/Users/x/notes/a.TXT")));
+        assert!(policy.allows(Path::new("/Users/x/notes/a.markdown")));
+        assert!(!policy.allows(Path::new("/Users/x/.zshrc")));
+        assert!(!policy.allows(Path::new("/Users/x/script.sh")));
+    }
+
+    #[test]
+    fn prefix_whitelist_extends_write_scope() {
+        let policy = AllowedPaths {
+            prefixes: vec!["/Users/x/notes/".to_string()],
+            suffixes: AllowedPaths::default_suffixes(),
+        };
+        assert!(policy.allows(Path::new("/Users/x/notes/config.json")));
+        assert!(!policy.allows(Path::new("/Users/x/other/config.json")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preserves_target_permissions_on_overwrite() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = temp_markdown_path("permissions.md");
+        std::fs::write(&path, "old").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+        let request = serde_json::json!({ "path": path.to_str().unwrap(), "content": "secret" });
+        let response = handle_request(request.to_string().as_bytes());
+        assert_eq!(response["ok"], serde_json::json!(true));
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "覆盖保存不得放宽原文件权限");
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
     fn atomic_write_leaves_no_temp_files() {
         let path = temp_markdown_path("atomic.md");
         std::fs::write(&path, "old").unwrap();
@@ -217,10 +346,12 @@ mod tests {
         let response = handle_request(request.to_string().as_bytes());
         assert_eq!(response["ok"], serde_json::json!(true));
         let dir = path.parent().unwrap();
+        // 只看本测试目标对应的临时文件（.atomic.md.markcraft-*）：
+        // 并行测试共享目录时，其他测试的瞬时临时文件不应导致误报
         let leftovers: Vec<_> = std::fs::read_dir(dir)
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().contains(".markcraft-"))
+            .filter(|e| e.file_name().to_string_lossy().contains(".atomic.md.markcraft-"))
             .collect();
         assert!(leftovers.is_empty(), "不应残留临时文件");
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "atomic content");
