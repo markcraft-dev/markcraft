@@ -111,9 +111,30 @@ function makeFence(run: number, minLen: number): string {
   return '`'.repeat(Math.max(run, minLen))
 }
 
-function nodeToMarkdown(node: Node, depth: number, insideTable: boolean): string {
+/**
+ * 文本节点最小转义：`*`/`_`/`#`/`[` 恒转义，`]` 在链接文本内转义，
+ * 防止正文里的这些字符被解析为强调、标题或链接结构（与 Rust 端 escapeText 一致）。
+ */
+function escapeText(text: string, insideLink: boolean): string {
+  let out = ''
+  for (const ch of text) {
+    if (ch === '*' || ch === '_' || ch === '#' || ch === '[' || (ch === ']' && insideLink)) {
+      out += `\\${ch}`
+    } else {
+      out += ch
+    }
+  }
+  return out
+}
+
+/** 链接/图片地址里的括号会被当作地址终点之外的结构字符，转义为百分号编码。 */
+function escapeLinkUrl(url: string): string {
+  return url.replace(/\(/g, '%28').replace(/\)/g, '%29')
+}
+
+function nodeToMarkdown(node: Node, depth: number, insideTable: boolean, insideLink: boolean = false): string {
   if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent || ''
+    return escapeText(node.textContent || '', insideLink)
   }
 
   if (node.nodeType !== Node.ELEMENT_NODE) {
@@ -150,7 +171,7 @@ function nodeToMarkdown(node: Node, depth: number, insideTable: boolean): string
     const titleEl = el.querySelector('.markdown-alert-title')
     if (titleEl) titleEl.remove()
 
-    const innerContent = getChildrenMarkdown(el, depth, insideTable).trim()
+    const innerContent = getChildrenMarkdown(el, depth, insideTable, insideLink).trim()
     const lines = innerContent.split('\n').map((l) => `> ${l}`).join('\n')
     return `\n> [!${alertType}]\n${lines}\n`
   }
@@ -181,50 +202,50 @@ function nodeToMarkdown(node: Node, depth: number, insideTable: boolean): string
     return `${fence}${pad}${content}${pad}${fence}`
   }
 
-  // Handle Headings
-  if (/^h[1-6]$/.test(tag)) {
-    const level = parseInt(tag[1], 10)
+  // Handle Headings：HTML 不存在 h7+，超范围级别收口到 h6 与 WASM 版一致
+  if (/^h[1-9]$/.test(tag)) {
+    const level = Math.min(parseInt(tag[1], 10), 6)
     const prefix = '#'.repeat(level)
-    return `\n${prefix} ${getChildrenMarkdown(el, depth, insideTable).trim()}\n`
+    return `\n${prefix} ${getChildrenMarkdown(el, depth, insideTable, insideLink).trim()}\n`
   }
 
   // Handle Paragraphs & Divs
   if (tag === 'p') {
-    return `\n${getChildrenMarkdown(el, depth, insideTable).trim()}\n`
+    return `\n${getChildrenMarkdown(el, depth, insideTable, insideLink).trim()}\n`
   }
 
   if (tag === 'blockquote') {
-    const inner = getChildrenMarkdown(el, depth, insideTable).trim()
+    const inner = getChildrenMarkdown(el, depth, insideTable, insideLink).trim()
     const lines = inner.split('\n').map((l) => `> ${l}`).join('\n')
     return `\n${lines}\n`
   }
 
   // Handle Strong / Bold
   if (tag === 'strong' || tag === 'b') {
-    return `**${getChildrenMarkdown(el, depth, insideTable)}**`
+    return `**${getChildrenMarkdown(el, depth, insideTable, insideLink)}**`
   }
 
   // Handle Emphasis / Italic
   if (tag === 'em' || tag === 'i') {
-    return `*${getChildrenMarkdown(el, depth, insideTable)}*`
+    return `*${getChildrenMarkdown(el, depth, insideTable, insideLink)}*`
   }
 
   // Handle Strikethrough
   if (tag === 'del' || tag === 's' || tag === 'strike') {
-    return `~~${getChildrenMarkdown(el, depth, insideTable)}~~`
+    return `~~${getChildrenMarkdown(el, depth, insideTable, insideLink)}~~`
   }
 
-  // Handle Links
+  // Handle Links：地址括号转义，链接文本内的 `]` 转义
   if (tag === 'a') {
-    const href = el.getAttribute('href') || ''
-    const text = getChildrenMarkdown(el, depth, insideTable)
+    const href = escapeLinkUrl(el.getAttribute('href') || '')
+    const text = getChildrenMarkdown(el, depth, insideTable, true)
     return `[${text}](${href})`
   }
 
   // Handle Images
   if (tag === 'img') {
-    const src = el.getAttribute('src') || ''
-    const alt = el.getAttribute('alt') || ''
+    const src = escapeLinkUrl(el.getAttribute('src') || '')
+    const alt = escapeText(el.getAttribute('alt') || '', true)
     return `![${alt}](${src})`
   }
 
@@ -241,7 +262,7 @@ function nodeToMarkdown(node: Node, depth: number, insideTable: boolean): string
         : tag === 'ol'
           ? `${start + idx}. `
           : '- '
-      const inner = getChildrenMarkdown(li, depth + 1, insideTable).trim()
+      const inner = getChildrenMarkdown(li, depth + 1, insideTable, insideLink).trim()
       const pad = ' '.repeat(marker.length)
       // 首行紧跟标记无需缩进，续行（嵌套列表等）按标记宽度缩进保持层级
       const indented = inner
@@ -273,13 +294,13 @@ function nodeToMarkdown(node: Node, depth: number, insideTable: boolean): string
     return '\n'
   }
 
-  return getChildrenMarkdown(el, depth, insideTable)
+  return getChildrenMarkdown(el, depth, insideTable, insideLink)
 }
 
-function getChildrenMarkdown(el: Node, depth: number, insideTable: boolean): string {
+function getChildrenMarkdown(el: Node, depth: number, insideTable: boolean, insideLink: boolean = false): string {
   let res = ''
   el.childNodes.forEach((child) => {
-    res += nodeToMarkdown(child, depth, insideTable)
+    res += nodeToMarkdown(child, depth, insideTable, insideLink)
   })
   return res
 }
