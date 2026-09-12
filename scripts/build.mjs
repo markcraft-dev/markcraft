@@ -96,6 +96,13 @@ async function runBuild() {
     }
 
     // 2. Build Content Script (IIFE global bundle)
+    // 说明（审计 t3-F7/F23 决策留痕）：
+    // - 内容脚本必须是单文件 IIFE（MV3 不支持 ESM content script），无法分包；
+    //   体积主要来自 mermaid/katex/highlight.js，按需加载属结构性专项。
+    // - run_at=document_start 保持不变：init 本就等 DOMContentLoaded，改
+    //   document_idle 只会让接管更晚（text/plain 页出现原文闪烁）。
+    // - sourcemap 策略：不生成（产物体积与源码暴露考量）；排查问题用本地
+    //   dev 构建。toAscii 后处理会使任何 map 失效。
     await build({
       root: rootDir,
       logLevel: 'warn',
@@ -173,6 +180,11 @@ async function runBuild() {
     }
     await chmodRecursive(outDir)
 
+    // 7. Verify every file referenced by manifest.json actually exists in dist/:
+    //    Vite 升级若改动产物命名（如 content/style.css），构建当场失败而不是
+    //    扩展运行时静默 404
+    verifyManifestReferences(outDir)
+
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
     console.log(`✨ Build completed in ${elapsed}s! Output ready in dist/`)
   } catch (err) {
@@ -181,8 +193,60 @@ async function runBuild() {
     isBuilding = false
     if (pendingBuild) {
       pendingBuild = false
-      runBuild()
+      void runBuild().catch((err) => console.error('❌ Rebuild failed:', err))
     }
+  }
+}
+
+/**
+ * 校验 manifest.json 引用的每个本地资源都存在于 dist/：
+ * content_scripts 的 js/css、web_accessible_resources、icons、
+ * popup/options 页面、_locales（default_locale）。
+ * web_accessible_resources 允许 `*` 通配（如 content/wasm/*）。
+ */
+function verifyManifestReferences(outDir) {
+  const manifestPath = resolve(outDir, 'manifest.json')
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  const distFiles = new Set()
+  const walk = (dir, prefix = '') => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name
+      if (entry.isDirectory()) walk(resolve(dir, entry.name), rel)
+      else distFiles.add(rel)
+    }
+  }
+  walk(outDir)
+  const missing = []
+  const check = (ref) => {
+    if (typeof ref !== 'string' || ref.startsWith('chrome-extension://') || ref.startsWith('http')) return
+    const clean = ref.split('?')[0]
+    if (clean.includes('*')) {
+      const pattern = new RegExp(`^${clean.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`)
+      for (const file of distFiles) {
+        if (pattern.test(file)) return
+      }
+      missing.push(ref)
+      return
+    }
+    if (!distFiles.has(clean)) missing.push(ref)
+  }
+  for (const cs of manifest.content_scripts ?? []) {
+    ;(cs.js ?? []).forEach(check)
+    ;(cs.css ?? []).forEach(check)
+  }
+  for (const war of manifest.web_accessible_resources ?? []) {
+    ;(war.resources ?? []).forEach(check)
+  }
+  Object.values(manifest.icons ?? {}).forEach(check)
+  if (manifest.action?.default_popup) check(manifest.action.default_popup)
+  if (manifest.options_page) check(manifest.options_page)
+  if (manifest.options_ui?.page) check(manifest.options_ui.page)
+  if (manifest.background?.service_worker) check(manifest.background.service_worker)
+  if (manifest.default_locale && !distFiles.has(`_locales/${manifest.default_locale}/messages.json`)) {
+    missing.push(`_locales/${manifest.default_locale}/messages.json`)
+  }
+  if (missing.length > 0) {
+    throw new Error(`manifest 引用的文件在 dist/ 中缺失: ${missing.join(', ')}`)
   }
 }
 
