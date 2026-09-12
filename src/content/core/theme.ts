@@ -1,10 +1,22 @@
 export type PageTheme = 'auto' | 'light' | 'sepia' | 'verdant' | 'dark' | 'nordic' | 'dracula'
 
+// auto 主题跟随系统深浅切换：监听器只挂一次，系统变更时实时重算并应用
+let schemeListenerAttached = false
+
 export function applyTheme(theme: PageTheme) {
   let effectiveTheme = theme
   if (theme === 'auto') {
-    const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-    effectiveTheme = isDark ? 'dark' : 'light'
+    const scheme = window.matchMedia?.('(prefers-color-scheme: dark)')
+    effectiveTheme = scheme?.matches ? 'dark' : 'light'
+    if (scheme && !schemeListenerAttached) {
+      schemeListenerAttached = true
+      const reapply = () => applyTheme('auto')
+      if (typeof scheme.addEventListener === 'function') {
+        scheme.addEventListener('change', reapply)
+      } else if (typeof scheme.addListener === 'function') {
+        scheme.addListener(reapply)
+      }
+    }
   }
   document.documentElement.dataset.mdrTheme = effectiveTheme
 }

@@ -10,9 +10,16 @@ const INVALID_CHARS = /[^\p{L}\p{M}\p{Nd}\p{Nl}\p{Pc}\- ]/gu
 
 /** JS 回退实现：与 WASM 版 slug 规则一致（已用集合 + 递增后缀，保证全局唯一）。 */
 function generateSlug(text: string, used: Set<string>): string {
-  const base = encodeURIComponent(
-    text.toLowerCase().replace(/ /g, '-').replace(INVALID_CHARS, '').trim()
+  const slugified = encodeURIComponent(
+    text
+      .toLowerCase()
+      .replace(/ /g, '-')
+      .replace(INVALID_CHARS, '')
+      // 首尾空格转成的连字符按 GitHub 行为修剪（与 Rust slugify 的 trim_matches('-') 一致）
+      .replace(/^[-]+|[-]+$/g, '')
   )
+  // 纯符号标题的空 slug 回退为 section 前缀（与 Rust 侧一致），避免非法空 id
+  const base = slugified || 'section'
   if (!used.has(base)) {
     used.add(base)
     return base
