@@ -135,7 +135,7 @@ import { domToMarkdown } from './core/dom-to-markdown'
 import { storeFileHandle, storeDirectoryHandle, trySilentSave, trySilentSaveViaDirectory, writeToFileHandle } from './core/file-handle-storage'
 import { tryNativeSave } from './core/native-save'
 import { useStorage, normalizeSettings } from '@/shared/storage'
-import type { OutlineItem, TreeNodeItem } from '@/shared/types'
+import type { OutlineItem, PageTheme, TreeNodeItem } from '@/shared/types'
 
 const props = defineProps<{
   initialContent: string
@@ -147,7 +147,7 @@ const rightSideOpen = ref(window.innerWidth > 1200)
 const leftSideWidth = ref(260)
 const rightSideWidth = ref(250)
 
-const currentTheme = ref<'auto' | 'light' | 'dark' | 'sepia' | 'nordic'>('auto')
+const currentTheme = ref<PageTheme>('auto')
 const readingProgress = ref(0)
 const settingsVisible = ref(false)
 const searchVisible = ref(false)

@@ -10,6 +10,7 @@ import supPlugin from 'markdown-it-sup'
 import insPlugin from 'markdown-it-ins'
 import markPlugin from 'markdown-it-mark'
 import deflistPlugin from 'markdown-it-deflist'
+import { t } from '@/shared/i18n'
 import abbrPlugin from 'markdown-it-abbr'
 import footnotePlugin from 'markdown-it-footnote'
 import mermaid from 'mermaid'
@@ -31,8 +32,10 @@ function tocPlugin(md: MarkdownIt): void {
         /^\[toc\]$/i.test(state.tokens[i + 1].content.trim())
       ) {
         const html = new state.Token('html_block', '', 0)
-        html.content =
-          '<div class="mdr-toc" id="mdr-toc"><div class="mdr-toc-title">目录</div></div>'
+        html.content = `<div class="mdr-toc" id="mdr-toc"><div class="mdr-toc-title">${t(
+          'ui_toc_title',
+          '目录'
+        )}</div></div>`
         state.tokens.splice(i, 3, html)
       }
     }

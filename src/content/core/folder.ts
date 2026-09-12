@@ -8,15 +8,49 @@ const MD_EXTENSIONS = ['.md', '.mkd', '.markdown', '.txt', '.mdx', '.mdc']
 const DIRECTORY_CACHE_TTL_MS = 30_000
 const directoryHtmlCache = new Map<string, { expiresAt: number; request: Promise<string> }>()
 
+// 目录读取失败状态：用于区分「空目录」与「读取失败」（如未开启文件访问权限）
+let directoryReadFailed = false
+let accessGuidanceShown = false
+
+/** 本会话内是否发生过本地目录读取失败（供 UI 区分空目录与失败状态）。 */
+export function hasDirectoryReadFailure(): boolean {
+  return directoryReadFailed
+}
+
+function handleDirectoryReadFailure(): void {
+  directoryReadFailed = true
+  if (accessGuidanceShown) return
+  accessGuidanceShown = true
+  // 最常见原因是扩展未开启「允许访问文件网址」；给出引导而非静默剪掉子目录
+  console.warn(
+    '[MarkCraft] 本地目录读取失败：请在 chrome://extensions → MarkCraft 详情页开启「允许访问文件网址」。' +
+      '未开启时子目录会显示为空。'
+  )
+}
+
 function fetchDirectoryHtml(url: string): Promise<string> {
   const normalizedUrl = url.endsWith('/') ? url : `${url}/`
   const cached = directoryHtmlCache.get(normalizedUrl)
   if (cached && cached.expiresAt > Date.now()) return cached.request
 
   const request = new Promise<string>((resolve) => {
-    chrome.runtime.sendMessage({ type: 'bg-fetch', url: normalizedUrl }, (res) => {
-      resolve(res?.ok ? res.res || '' : '')
-    })
+    try {
+      chrome.runtime.sendMessage({ type: 'bg-fetch', url: normalizedUrl }, (res) => {
+        // 读取并吞噬 lastError，避免未处理异常
+        void chrome.runtime.lastError
+        if (res?.ok) {
+          directoryReadFailed = false
+          resolve(res.res || '')
+        } else {
+          handleDirectoryReadFailure()
+          resolve('')
+        }
+      })
+    } catch {
+      // 扩展上下文失效等同步异常按读取失败处理，不让 Promise 变成 unhandledrejection
+      handleDirectoryReadFailure()
+      resolve('')
+    }
   })
   directoryHtmlCache.set(normalizedUrl, { expiresAt: Date.now() + DIRECTORY_CACHE_TTL_MS, request })
   request.then((html) => {

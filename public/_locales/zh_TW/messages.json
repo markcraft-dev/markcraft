@@ -14,5 +14,29 @@
   "command_toggle_side": {
     "message": "切換側邊欄",
     "description": "Shortcut command: toggleSide"
+  },
+  "ui_toc_title": {
+    "message": "目錄",
+    "description": "[TOC] block title"
+  },
+  "ui_copy": {
+    "message": "複製",
+    "description": "Code block copy button label"
+  },
+  "ui_copied": {
+    "message": "已複製",
+    "description": "Code block copy button label after copying"
+  },
+  "ui_copy_heading_link": {
+    "message": "複製標題連結",
+    "description": "Heading anchor tooltip"
+  },
+  "ui_folder_doc_title": {
+    "message": "資料夾目錄",
+    "description": "Local folder placeholder document title"
+  },
+  "ui_folder_doc_body": {
+    "message": "請在左側側邊欄中選擇要閱讀的 Markdown 文件。",
+    "description": "Local folder placeholder document body"
   }
 }

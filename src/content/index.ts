@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import App from './App.vue'
+import { t } from '@/shared/i18n'
 import 'katex/dist/katex.min.css'
 import 'highlight.js/styles/github.css'
 import './styles/markdown.css'
@@ -25,6 +26,11 @@ function isRawMarkdownDocument(isLocal: boolean, contentType: string | undefined
   return normalizedType === 'application/octet-stream' && hasPreformattedContent
 }
 
+/** Chrome 本地目录列表页由内联脚本调用 addRow(...) 渲染，可作为目录识别的强信号。 */
+function looksLikeLocalDirectoryListing(): boolean {
+  return Array.from(document.scripts).some((script) => (script.textContent || '').includes('addRow('))
+}
+
 function init() {
   // 1. Explicitly ignore non-text / PDF content types and media
   if (
@@ -39,14 +45,20 @@ function init() {
   const isLocal = window.location.protocol === 'file:'
   const rawPath = window.location.pathname
   const cleanPath = rawPath.split('?')[0].split('#')[0]
+  const filename = cleanPath.slice(cleanPath.lastIndexOf('/') + 1)
 
   const isMd = isMarkdownPath(cleanPath)
-  const isDir = isLocal && (cleanPath.endsWith('/') || !cleanPath.slice(cleanPath.lastIndexOf('/') + 1).includes('.'))
+  // 目录判定：尾斜杠、无扩展名，或页面本身是 Chrome 的 addRow 目录列表——
+  // 「v1.2」这类含点目录名不再被误判为文件
+  const isDir =
+    isLocal &&
+    (cleanPath.endsWith('/') || !filename.includes('.') || looksLikeLocalDirectoryListing())
 
-  const preEl = document.querySelector('pre')
+  const preElements = Array.from(document.querySelectorAll('pre'))
+  const preEl = preElements[0] ?? null
 
   // 远程 .md HTML 页面可能是平台渲染结果，不能仅凭后缀覆盖原页面。
-  if (isMd && !isRawMarkdownDocument(isLocal, document.contentType, Boolean(preEl))) {
+  if (isMd && !isRawMarkdownDocument(isLocal, document.contentType, preElements.length > 0)) {
     return
   }
 
@@ -55,9 +67,8 @@ function init() {
     return
   }
 
-  // Double check: if it has an extension and it's NOT a markdown extension, skip!
-  const filename = cleanPath.slice(cleanPath.lastIndexOf('/') + 1)
-  if (filename.includes('.')) {
+  // 文件才做扩展名复核（目录名可以含点，如 v1.2）
+  if (!isDir && filename.includes('.')) {
     const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase()
     if (!MARKDOWN_EXTENSIONS.has(ext)) {
       return
@@ -71,12 +82,16 @@ function init() {
   // Extract raw markdown content from <pre> if viewing a file
   let rawContent = ''
 
-  if (preEl) {
-    rawContent = preEl.innerText
+  if (preElements.length > 0) {
+    // text/plain 页可能含多个 <pre>（分段正文），全部拼接避免内容缺失
+    rawContent = preElements.map((pre) => pre.innerText).join('\n\n')
   } else if (!isDir) {
     rawContent = document.body.innerText
   } else {
-    rawContent = '# 文件夹目录\n\n请在左侧侧边栏中选择要阅读的 Markdown 文件。'
+    rawContent = `# ${t('uiFolderDocTitle', '文件夹目录')}\n\n${t(
+      'uiFolderDocBody',
+      '请在左侧侧边栏中选择要阅读的 Markdown 文件。'
+    )}`
   }
 
   // Create and append root container safely without wiping body.innerHTML
