@@ -36,7 +36,7 @@
     "vue": "^3.4.21"
   },
   "devDependencies": {
-    "@types/chrome": "^0.0.268",
+    "@types/chrome": "^0.2.9",
     "@types/lodash-es": "^4.17.12",
     "@types/markdown-it": "^13.0.7",
     "@types/node": "^26.5.1",
