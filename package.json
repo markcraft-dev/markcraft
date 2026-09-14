@@ -39,7 +39,7 @@
     "@types/chrome": "^0.0.268",
     "@types/lodash-es": "^4.17.12",
     "@types/markdown-it": "^13.0.7",
-    "@types/node": "^20.11.24",
+    "@types/node": "^26.5.1",
     "@unocss/vite": "^0.58.6",
     "@vitejs/plugin-vue": "^5.0.4",
     "typescript": "^5.3.3",
