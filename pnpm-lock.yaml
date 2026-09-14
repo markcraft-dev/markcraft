@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@mdit/plugin-alert':
         specifier: ^0.13.1
-        version: 0.13.1(markdown-it@14.3.0)
+        version: 0.13.1(markdown-it@14.3.2)
       '@traptitech/markdown-it-katex':
         specifier: ^3.6.0
         version: 3.6.0
@@ -27,8 +27,8 @@ importers:
         specifier: ^4.17.21
         version: 4.18.1
       markdown-it:
-        specifier: ^14.1.0
-        version: 14.3.0
+        specifier: ^14.3.2
+        version: 14.3.2
       markdown-it-abbr:
         specifier: ^2.0.0
         version: 2.0.0
@@ -1372,8 +1372,8 @@ packages:
   markdown-it-task-lists@2.1.1:
     resolution: {integrity: sha512-TxFAc76Jnhb2OUu+n3yz9RMu4CwGfaT788br6HhEDlvWfdeJcLUsxk1Hgw2yJio0OXsxv7pyIPmvECY7bMbluA==}
 
-  markdown-it@14.3.0:
-    resolution: {integrity: sha512-RCEsPjR+sr0x+AuYp601tKTkgFG4YEPLCzHST3cQ/fhlJkqAkz1L2/Qbp1j9qw5SBwQHFBoW8+hoN5xssOF0Tw==}
+  markdown-it@14.3.2:
+    resolution: {integrity: sha512-sHHjZ5fJKlgrG4qns2YwVcdNep35h5fERrfkD2YNsb9UFk0UIHarbiTaHKVMlPuWAoiilyK8Fv/jAm11slsY7Q==}
     hasBin: true
 
   mdast-util-from-markdown@1.3.0:
@@ -1684,6 +1684,7 @@ packages:
 
   uuid@10.0.0:
     resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   uuid@14.0.2:
@@ -2069,11 +2070,11 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.4.14
 
-  '@mdit/plugin-alert@0.13.1(markdown-it@14.3.0)':
+  '@mdit/plugin-alert@0.13.1(markdown-it@14.3.2)':
     dependencies:
       '@types/markdown-it': 14.2.0
     optionalDependencies:
-      markdown-it: 14.3.0
+      markdown-it: 14.3.2
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
@@ -2997,7 +2998,7 @@ snapshots:
 
   markdown-it-task-lists@2.1.1: {}
 
-  markdown-it@14.3.0:
+  markdown-it@14.3.2:
     dependencies:
       argparse: 2.0.1
       entities: 4.5.0
