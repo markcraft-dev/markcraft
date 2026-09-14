@@ -13,6 +13,13 @@ It provides a polished Markdown reading experience with in-browser WYSIWYG editi
 - Customize themes, fonts, content width, and Markdown plugins
 - Keep document contents and settings local to the user’s browser and device
 
+## Install
+
+No build tools needed — grab a prebuilt package from [Releases](https://github.com/markcraft-dev/markcraft/releases):
+
+1. Download `markcraft-vX.Y.Z.zip` from the latest release and unzip it.
+2. Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the unzipped `markcraft` folder.
+
 ## Development
 
 ```bash
