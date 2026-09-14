@@ -15,12 +15,28 @@
     "message": "Toggle Sidebar",
     "description": "Shortcut command: toggleSide"
   },
-  "command_toggle_centered": {
-    "message": "Toggle Centered Layout",
-    "description": "Shortcut command: toggleCentered"
+  "ui_toc_title": {
+    "message": "Table of contents",
+    "description": "[TOC] block title"
   },
-  "command_toggle_refresh": {
-    "message": "Refresh Document",
-    "description": "Shortcut command: toggleRefresh"
+  "ui_copy": {
+    "message": "Copy",
+    "description": "Code block copy button label"
+  },
+  "ui_copied": {
+    "message": "Copied",
+    "description": "Code block copy button label after copying"
+  },
+  "ui_copy_heading_link": {
+    "message": "Copy heading link",
+    "description": "Heading anchor tooltip"
+  },
+  "ui_folder_doc_title": {
+    "message": "Folder contents",
+    "description": "Local folder placeholder document title"
+  },
+  "ui_folder_doc_body": {
+    "message": "Select a Markdown file in the sidebar to start reading.",
+    "description": "Local folder placeholder document body"
   }
 }

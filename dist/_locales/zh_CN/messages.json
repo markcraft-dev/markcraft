@@ -15,12 +15,28 @@
     "message": "切换侧边栏",
     "description": "Shortcut command: toggleSide"
   },
-  "command_toggle_centered": {
-    "message": "切换居中排版",
-    "description": "Shortcut command: toggleCentered"
+  "ui_toc_title": {
+    "message": "目录",
+    "description": "[TOC] block title"
   },
-  "command_toggle_refresh": {
-    "message": "刷新 Markdown 文档",
-    "description": "Shortcut command: toggleRefresh"
+  "ui_copy": {
+    "message": "复制",
+    "description": "Code block copy button label"
+  },
+  "ui_copied": {
+    "message": "已复制",
+    "description": "Code block copy button label after copying"
+  },
+  "ui_copy_heading_link": {
+    "message": "复制标题链接",
+    "description": "Heading anchor tooltip"
+  },
+  "ui_folder_doc_title": {
+    "message": "文件夹目录",
+    "description": "Local folder placeholder document title"
+  },
+  "ui_folder_doc_body": {
+    "message": "请在左侧侧边栏中选择要阅读的 Markdown 文件。",
+    "description": "Local folder placeholder document body"
   }
 }
