@@ -13,6 +13,13 @@ MarkCraft 是一款以隐私优先为理念的 Chrome 扩展，用于直接在�
 - 自定义主题、字体、内容宽度和 Markdown 插件
 - 文档内容和设置保留在用户的浏览器与设备本地
 
+## 安装
+
+无需搭建构建环境——直接从 [Releases](https://github.com/markcraft-dev/markcraft/releases) 下载预构建包：
+
+1. 从最新 release 下载 `markcraft-vX.Y.Z.zip` 并解压。
+2. 打开 `chrome://extensions`，开启右上角「开发者模式」，点击「加载已解压的扩展程序」，选择解压出的 `markcraft` 文件夹。
+
 ## 开发
 
 ```bash
