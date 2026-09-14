@@ -47,7 +47,7 @@ jobs:
       - name: Package extension
         run: |
           mv dist markcraft
-          zip -qr "markcraft-${{ github.ref_name }}.zip" markcraft
+          zip -qr "markcraft-${{ github.ref_name }}.zip" markcraft -x '*.DS_Store'
 
       - name: Create release and upload asset
         env:
