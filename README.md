@@ -51,4 +51,4 @@ MarkCraft is designed for local-first use. Before publishing, verify the extensi
 
 ## License
 
-MarkCraft is not yet licensed for redistribution. A project license will be added before the first public release.
+MarkCraft is released under the [MIT License](LICENSE).

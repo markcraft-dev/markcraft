@@ -1,9 +1,10 @@
 {
   "name": "markcraft",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "description": "MarkCraft - Crafted Markdown Reader & In-Browser WYSIWYG Editor Extension",
+  "license": "MIT",
   "homepage": "https://github.com/markcraft-dev/markcraft",
   "repository": {
     "type": "git",

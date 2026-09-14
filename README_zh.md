@@ -51,4 +51,4 @@ MarkCraft 按本地优先方式设计。正式发布前，请根据当前实现�
 
 ## 许可证
 
-MarkCraft 当前尚未授予再分发许可。首次公开发布前将补充项目许可证。
+MarkCraft 基于 [MIT 许可证](LICENSE) 发布。
