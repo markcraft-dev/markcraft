@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@mdit/plugin-alert':
-        specifier: ^0.13.1
-        version: 0.13.1(markdown-it@14.3.2)
+        specifier: ^1.0.3
+        version: 1.0.3(markdown-it@14.3.2)
       '@traptitech/markdown-it-katex':
         specifier: ^3.6.0
         version: 3.6.0
@@ -418,10 +418,11 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@mdit/plugin-alert@0.13.1':
-    resolution: {integrity: sha512-3LMYQQ3QP6TUx6zmtmuoHJScST5SVoPZlNuuF4S6PUZvJIwtlITF+eFNjDrA7UQx0PUdCgVHmwu5kYliq+BNtg==}
+  '@mdit/plugin-alert@1.0.3':
+    resolution: {integrity: sha512-IWMW8EOOa1ukc7YQQoIuZ8mwPUF5yM4qbHm2s+j5QSrPGob7bUKyvFYOQ9QYiW03J4izsf8GzTSwLCtlHkqMEw==}
+    engines: {node: '>=22'}
     peerDependencies:
-      markdown-it: ^14.1.0
+      markdown-it: ^14.2.0
     peerDependenciesMeta:
       markdown-it:
         optional: true
@@ -2070,7 +2071,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.4.14
 
-  '@mdit/plugin-alert@0.13.1(markdown-it@14.3.2)':
+  '@mdit/plugin-alert@1.0.3(markdown-it@14.3.2)':
     dependencies:
       '@types/markdown-it': 14.2.0
     optionalDependencies:

@@ -15,7 +15,7 @@
     "build": "npm run build:wasm && node scripts/build.mjs"
   },
   "dependencies": {
-    "@mdit/plugin-alert": "^0.13.1",
+    "@mdit/plugin-alert": "^1.0.3",
     "@traptitech/markdown-it-katex": "^3.6.0",
     "github-markdown-css": "^5.9.0",
     "highlight.js": "^11.9.0",
