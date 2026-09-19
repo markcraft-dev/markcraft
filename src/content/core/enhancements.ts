@@ -48,7 +48,8 @@ function setCopyButtonContent(btn: HTMLButtonElement, state: 'idle' | 'copied') 
 
 export function enhanceContentBlocks(
   container: HTMLElement,
-  onOpenImageModal: (src: string, alt: string) => void
+  onOpenImageModal: (src: string, alt: string) => void,
+  getSectionUrl?: (slug: string) => string
 ) {
   if (!container) return
 
@@ -147,6 +148,8 @@ export function enhanceContentBlocks(
   // 3. Heading anchor links (GitHub 式悬停锚点，点击复制标题链接)
   //    注意：锚点元素保持空文本，'#' 由 CSS ::before 渲染，
   //    避免污染 heading.textContent（大纲/TOC/搜索的标题来源）
+  //    R8: 链接经 doc-url 的 buildSectionUrl 构造（调用方传入当前文档），
+  //    避免 hash-route 页面复制出指向错误文档的旧式 location.split('#') 链接
   const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6')
   headings.forEach((heading) => {
     if (heading.querySelector('.mdr-heading-anchor')) return
@@ -158,8 +161,11 @@ export function enhanceContentBlocks(
         e.preventDefault()
         e.stopPropagation()
         if (!heading.id) return
+        const link = getSectionUrl
+          ? getSectionUrl(heading.id)
+          : `${location.href.split('#')[0]}#${heading.id}`
         try {
-          await navigator.clipboard.writeText(`${location.href.split('#')[0]}#${heading.id}`)
+          await navigator.clipboard.writeText(link)
           anchor.classList.add('mdr-anchor-copied')
           setTimeout(() => {
             anchor.classList.remove('mdr-anchor-copied')

@@ -131,6 +131,28 @@ export function isSameDocument(a: string, b: string): boolean {
 }
 
 /**
+ * Build a shareable section link for `slug` in document `docHref` (R8).
+ *
+ * Format decision (the t3 double-hash legacy): always absolute-doc + single
+ * hash — `${doc}#${slug}`. The `?mdr-doc=` query form would force a full
+ * reload even for same-document links, and appending a second `#` to an
+ * active `#mdr-doc=` hash route silently breaks the doc pointer. The slug is
+ * already percent-encoded by `slug.ts`, so embedding it raw is safe.
+ * Paste behavior: same-doc links jump instantly; cross-doc links navigate
+ * and App resolves the anchor after render (with retry).
+ */
+export function buildSectionUrl(docHref: string, slug: string): string {
+  const clean = (slug || '').replace(/^#+/, '')
+  let doc = ''
+  try {
+    doc = (docHref || '').split('#')[0] || stripDocPointer(window.location.href).split('#')[0]
+  } catch {
+    doc = (docHref || '').split('#')[0]
+  }
+  return `${doc}#${clean}`
+}
+
+/**
  * Record an in-place document switch in history. Full-URL first, hash-route
  * fallback for file:// opaque origins. Never throws; returns the effective URL.
  */

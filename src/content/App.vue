@@ -209,6 +209,7 @@ import {
   scheduleSaveScrollPosition
 } from './core/scroll-memory'
 import {
+  buildSectionUrl,
   fetchDocContent,
   isSameDocument,
   parseDocUrl,
@@ -338,7 +339,11 @@ async function updateMarkdown(rawText: string) {
   if (seq !== renderSeq) return
 
   if (contentRef.value) {
-    enhanceContentBlocks(contentRef.value, openLightbox)
+    // R8: hover anchors copy via doc-url so hash-route pages produce links
+    // to the shown document, not to the underlying page file.
+    enhanceContentBlocks(contentRef.value, openLightbox, (slug) =>
+      buildSectionUrl(currentActiveHref.value, slug)
+    )
     await refreshOutline()
   }
 
@@ -707,35 +712,72 @@ async function switchToDocument(
     }
     await handleContentChange(raw, href, { replace: opts?.replace })
     sideRef.value?.setActiveHref(href)
-    if (opts?.anchor) scrollToAnchor(opts.anchor)
+    if (opts?.anchor) void scrollToAnchorWithRetry(opts.anchor, href)
   } finally {
     if (pendingSwitchHref === href) pendingSwitchHref = null
   }
 }
 
-function scrollToAnchor(anchor: string) {
+// R8 direct-to-section: retry the anchor jump while async layout settles
+// (Mermaid/images shift offsets after first paint). Aborts when a newer
+// document switch takes over the viewport.
+const ANCHOR_RETRY_DELAYS_MS = [0, 120, 350, 800, 1500]
+const ANCHOR_HEADER_OFFSET = 54
+function findAnchorElement(anchor: string): HTMLElement | null {
+  // DOM ids hold the ENCODED slug (extractOutline writes href.slice(1)), so
+  // try the literal anchor first; the decoded form is a legacy fallback
+  // (pre-R8 scrollToAnchor decoded unconditionally, breaking CJK jumps).
+  let raw = ''
   try {
-    const id = decodeURIComponent(anchor.replace(/^#+/, ''))
-    if (!id) return
-    // CSS.escape may be unavailable in older contexts; fall back to raw id.
-    let el: HTMLElement | null = null
-    try {
-      el = document.getElementById(id)
-    } catch {
-      return
-    }
-    if (el) {
-      const headerOffset = 54
-      const elementPosition = el.getBoundingClientRect().top
-      const offsetPosition = elementPosition + window.pageYOffset - headerOffset
-      window.scrollTo({
-        top: Math.max(0, offsetPosition),
-        behavior: 'auto'
-      })
-    }
+    raw = anchor.replace(/^#+/, '')
   } catch {
-    // A bad anchor must never break the document switch.
+    return null
   }
+  if (!raw) return null
+  const candidates = [raw]
+  try {
+    const decoded = decodeURIComponent(raw)
+    if (decoded && decoded !== raw) candidates.push(decoded)
+  } catch {
+    // Malformed escape: literal-only lookup.
+  }
+  for (const id of candidates) {
+    try {
+      const el = document.getElementById(id)
+      if (el) return el
+    } catch {
+      // Invalid id characters: try the next candidate.
+    }
+  }
+  return null
+}
+async function scrollToAnchorWithRetry(anchor: string, docHref?: string): Promise<void> {
+  const expected = docHref || currentActiveHref.value
+  for (let i = 0; i < ANCHOR_RETRY_DELAYS_MS.length; i += 1) {
+    if (currentActiveHref.value !== expected) return
+    const delay = ANCHOR_RETRY_DELAYS_MS[i]
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    } else {
+      await nextTick()
+    }
+    if (currentActiveHref.value !== expected) return
+    const el = findAnchorElement(anchor)
+    if (!el) continue
+    const elementPosition = el.getBoundingClientRect().top
+    // Settled when the heading sits just under the fixed header.
+    if (Math.abs(elementPosition - ANCHOR_HEADER_OFFSET) <= 3) return
+    window.scrollTo({
+      top: Math.max(0, elementPosition + window.pageYOffset - ANCHOR_HEADER_OFFSET),
+      behavior: 'auto'
+    })
+    // Last attempt always applies; earlier ones re-verify after layout shifts.
+    if (i === ANCHOR_RETRY_DELAYS_MS.length - 1) return
+  }
+}
+
+function scrollToAnchor(anchor: string) {
+  void scrollToAnchorWithRetry(anchor)
 }
 
 function handlePaletteSelectFile(item: PaletteItem) {
@@ -947,6 +989,11 @@ onMounted(async () => {
   const initial = parseDocUrl(window.location.href)
   if (initial.docHref && !isSameDocument(initial.docHref, currentActiveHref.value)) {
     await switchToDocument(initial.docHref, undefined, { replace: true, anchor: initial.anchor })
+  } else if (initial.anchor) {
+    // R8: an explicit section fragment (pasted/shared section link) wins over
+    // the remembered offset — TOC clicks never write hashes, so a present
+    // anchor always means section intent.
+    await scrollToAnchorWithRetry(initial.anchor)
   } else {
     // First paint: resume this document's remembered place (reload case),
     // otherwise start at the top.

@@ -1,36 +1,16 @@
 import type { OutlineItem } from '@/shared/types'
 import { loadAnalyzer } from './wasm_analyzer'
+import { assignHeadingSlugs } from './slug'
 
 interface HeadingSnapshot {
   text: string
   level: number
 }
 
-const INVALID_CHARS = /[^\p{L}\p{M}\p{Nd}\p{Nl}\p{Pc}\- ]/gu
-
-/** JS 回退实现：与 WASM 版 slug 规则一致（已用集合 + 递增后缀，保证全局唯一）。 */
-function generateSlug(text: string, used: Set<string>): string {
-  const slugified = encodeURIComponent(
-    text
-      .toLowerCase()
-      .replace(/ /g, '-')
-      .replace(INVALID_CHARS, '')
-      // 首尾空格转成的连字符按 GitHub 行为修剪（与 Rust slugify 的 trim_matches('-') 一致）
-      .replace(/^[-]+|[-]+$/g, '')
-  )
-  // 纯符号标题的空 slug 回退为 section 前缀（与 Rust 侧一致），避免非法空 id
-  const base = slugified || 'section'
-  if (!used.has(base)) {
-    used.add(base)
-    return base
-  }
-  // 只按基名计数会让 a, a, a-1 序列产出重复的 #a-1；已用集合 + 递增直到未占用
-  let n = 1
-  while (used.has(`${base}-${n}`)) n += 1
-  const slug = `${base}-${n}`
-  used.add(slug)
-  return slug
-}
+/**
+ * JS 回退实现：slug 规则见 `slug.ts`（与 Rust slug.rs / outline.rs 同源）。
+ * 全文标题一次分配，与 WASM 路径输出一致。
+ */
 
 function buildOutlineFallback(
   headings: HTMLElement[],
@@ -39,11 +19,11 @@ function buildOutlineFallback(
   const flatResult: OutlineItem[] = []
   const treeResult: OutlineItem[] = []
   const stack: OutlineItem[] = []
-  const usedSlugs: Set<string> = new Set()
+  const slugs = assignHeadingSlugs(headings.map((h) => (h.textContent || '').trim()))
 
   headings.forEach((heading, idx) => {
     const text = (heading.textContent || '').trim()
-    const slug = generateSlug(text, usedSlugs)
+    const slug = slugs[idx]
 
     const level = Number.parseInt(heading.tagName.slice(1), 10)
     const item: OutlineItem = {
