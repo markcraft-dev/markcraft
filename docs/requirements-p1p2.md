@@ -121,6 +121,9 @@
 - **Fixture（R9 的 R，P1 内）**：`reference/fixtures/*.md` + 每功能验收表打勾；`xss.md`、`export-*`、`copy-fidelity.md`、`viewer-test.md`（抄 mdview Safe Test File 四件套：任务列表+表格+行内公式+Mermaid）。
 - **P2-4 大文档性能**：Mermaid/KaTeX 渐进渲染、大纲虚拟化、图片懒加载；1MB fixture 首绘 ≤2s（参考机留档）。**不进 Phase-2，进 Phase-3**。
 - **P2-5 主题包**：打印主题 + CN 字体栈 + WCAG AA 对比度审计。**不进 Phase-2，进 Phase-3**。
+- **测试约定（unit）**：`npm run test:unit` = tsc 单文件编译到 `tests/.tmp` + `node --test`，零新依赖。
+  - 被测模块须是无本地导入的叶子模块；跨模块复用（如 `recents.ts` 用 `scroll-memory.ts` 的 `normalizeScrollKey`）时，源码须写 `.js` 后缀 import（`./scroll-memory.js`），否则 Node ESM 解析失败（Vite 构建侧已验证兼容）。
+  - 新模块按此接线：tsc 输入与 `.test.mjs` 一并追加到 `test:unit` 脚本。
 
 ## Phase-2 任务拆分（给团队用，依赖已排好）
 
