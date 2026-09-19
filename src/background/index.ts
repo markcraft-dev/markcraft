@@ -7,13 +7,35 @@ const NATIVE_SAVE_MAX_CONTENT_CHARS = 64 * 1024 * 1024
 // 宿主响应基础超时：按内容长度放大（与内容侧 native-save.ts 口径一致）
 const NATIVE_SAVE_BASE_TIMEOUT_MS = 4_000
 
+// bg-fetch 响应上限（字符数）：目录列表页与 Markdown 文档远小于此值，
+// 超大响应直接拒绝，避免 SW 把 GB 级文件读进内存
+const BG_FETCH_MAX_RESPONSE_CHARS = 16 * 1024 * 1024
+// 仅允许文档/目录读取相关的协议：file（本地目录与文档）、http(s)（远程 .md）
+const BG_FETCH_ALLOWED_PROTOCOLS = ['file:', 'http:', 'https:']
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'bg-fetch' || request.action === 'bg-fetch') {
     const url = request.url || request.data?.url
+    const senderId = (sender as { id?: string }).id
+    let protocol = ''
+    try {
+      protocol = new URL(String(url)).protocol
+    } catch {
+      protocol = ''
+    }
+    // 纵深防御：仅接受本扩展上下文消息，且目标协议必须在白名单内
+    if (senderId !== chrome.runtime.id || !BG_FETCH_ALLOWED_PROTOCOLS.includes(protocol)) {
+      sendResponse({ ok: false, msg: 'bg-fetch request rejected' })
+      return true
+    }
     fetch(url)
       .then(async (response) => {
         try {
           const text = await response.text()
+          if (text.length > BG_FETCH_MAX_RESPONSE_CHARS) {
+            sendResponse({ ok: false, msg: 'response too large' })
+            return
+          }
           const isOk = response.ok || response.status === 0 || response.status === 200
           sendResponse({ ok: isOk, res: text, status: response.status })
         } catch (e: any) {

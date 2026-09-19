@@ -2,6 +2,9 @@
   <transition name="fade">
     <div
       v-if="visible"
+      role="dialog"
+      aria-modal="true"
+      aria-label="图片预览"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md select-none print:hidden"
       @click.self="$emit('close')"
     >
@@ -51,7 +54,7 @@
 
 <script setup lang="ts">
 import SvgIcon from '@/components/SvgIcon.vue'
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps<{
   visible: boolean
@@ -64,6 +67,14 @@ const emit = defineEmits<{
 }>()
 
 const scale = ref(1)
+
+// 每次打开新图片都从 100% 开始，避免沿用上一张的缩放
+watch(
+  () => props.visible,
+  (val) => {
+    if (val) scale.value = 1
+  }
+)
 
 function zoomIn() {
   scale.value = Math.min(3, scale.value + 0.25)

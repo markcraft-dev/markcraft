@@ -50,7 +50,7 @@
     <div class="pt-12px border-t border-[--border-color] text-12px flex flex-col gap-10px text-[--text-secondary]">
       <label class="flex items-center justify-between cursor-pointer hover:text-[--text-primary] transition-colors">
         <span>自适应居中排版</span>
-        <input v-model="settings.enableCustomContentWidth" type="checkbox" class="accent-blue-500 cursor-pointer" @change="saveChanges" />
+        <input v-model="settings.enableCustomContentWidth" type="checkbox" class="accent-blue-500 cursor-pointer" @change="handleWidthToggle" />
       </label>
       <label class="flex items-center justify-between cursor-pointer hover:text-[--text-primary] transition-colors">
         <span>KaTeX 数学公式渲染</span>
@@ -102,6 +102,15 @@ function togglePlugin(name: string) {
 
 function saveChanges() {
   saveSettings(settings.value)
+}
+
+// 开启时若从未设置过宽度，给默认值 900，否则开关是视觉上的空操作
+// （applyCustomStyles 在 contentWidth 缺失时会直接移除变量）
+function handleWidthToggle() {
+  if (settings.value.enableCustomContentWidth && !settings.value.customContentWidth) {
+    settings.value.customContentWidth = 900
+  }
+  saveChanges()
 }
 
 function openOptions() {

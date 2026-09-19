@@ -7,6 +7,9 @@
     >
       <!-- Wide-Screen Responsive Command Palette Card -->
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="快速搜索与指令"
         class="search-palette w-full max-w-[min(90vw,760px)] bg-[--bg-page]/95 backdrop-blur-2xl text-[--text-primary] rounded-2xl shadow-2xl border border-[--border-color] flex flex-col overflow-hidden animate-in"
       >
         <!-- Top Prominent Search Input Row -->
@@ -161,7 +164,7 @@ const actions = [
   { id: 'export-md', title: '下载 Markdown 文本文件', shortcut: '⌥S', icon: 'download' },
   { id: 'settings', title: '打开偏好设置', shortcut: '⌘,', icon: 'settings' },
   { id: 'theme', title: '切换界面明暗主题', shortcut: '⌘T', icon: 'sun' },
-  { id: 'raw', title: '切换 Markdown 原始源码 / 在线编辑', shortcut: '⌘E', icon: 'file-code' },
+  { id: 'raw', title: '切换所见即所得编辑 (⌘E)', shortcut: '⌘E', icon: 'file-code' },
   { id: 'fullscreen', title: '全屏沉浸阅读', shortcut: '⌘F', icon: 'maximize' },
   { id: 'print', title: '打印 / 导出 PDF', shortcut: '⌘P', icon: 'printer' }
 ]
@@ -177,7 +180,9 @@ watch(
     const items = await searchPalette(props.files, props.headings, query.value)
     if (seq === searchSeq) {
       filteredItems.value = items
-      selectedIndex.value = 0
+      // 结果刷新时夹紧而非归零：输入过程中键盘选择不再跳回首项
+      selectedIndex.value = Math.min(selectedIndex.value, items.length + actions.length - 1)
+      if (selectedIndex.value < 0) selectedIndex.value = 0
     }
   },
   { immediate: true }

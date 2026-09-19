@@ -6,7 +6,13 @@
         ? 'bg-[--bg-active] text-[--text-primary] font-semibold'
         : 'text-[--text-secondary] hover:bg-[--bg-hover] hover:text-[--text-primary]'"
       :style="{ paddingLeft: `${depth * 14 + 8}px` }"
+      role="treeitem"
+      :aria-expanded="item.isFolder ? item.expanded : undefined"
+      :aria-selected="item.active"
+      tabindex="0"
       @click="handleClick"
+      @keydown.enter.prevent="handleClick"
+      @keydown.space.prevent="handleClick"
     >
       <!-- Expand / Collapse chevron for folders -->
       <span
@@ -85,7 +91,8 @@ const emit = defineEmits<{
 
 const isMarkdownFile = computed(() => {
   const name = props.item.content.toLowerCase()
-  return name.endsWith('.md') || name.endsWith('.markdown') || name.endsWith('.mkd') || name.endsWith('.txt')
+  // 与 folder.ts 的 MD_EXTENSIONS 清单保持一致（含 .mdx/.mdc/.markdown/.txt）
+  return ['.md', '.mkd', '.markdown', '.txt', '.mdx', '.mdc'].some((ext) => name.endsWith(ext))
 })
 
 const iconColorClass = computed(() => {

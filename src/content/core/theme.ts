@@ -2,15 +2,20 @@ export type PageTheme = 'auto' | 'light' | 'sepia' | 'verdant' | 'dark' | 'nordi
 
 // auto 主题跟随系统深浅切换：监听器只挂一次，系统变更时实时重算并应用
 let schemeListenerAttached = false
+// 用户显式选择的主题：系统变更回调仅在仍为 auto 时重算，避免覆盖用户已选的固定主题
+let requestedTheme: PageTheme = 'auto'
 
 export function applyTheme(theme: PageTheme) {
+  requestedTheme = theme
   let effectiveTheme = theme
   if (theme === 'auto') {
     const scheme = window.matchMedia?.('(prefers-color-scheme: dark)')
     effectiveTheme = scheme?.matches ? 'dark' : 'light'
     if (scheme && !schemeListenerAttached) {
       schemeListenerAttached = true
-      const reapply = () => applyTheme('auto')
+      const reapply = () => {
+        if (requestedTheme === 'auto') applyTheme('auto')
+      }
       if (typeof scheme.addEventListener === 'function') {
         scheme.addEventListener('change', reapply)
       } else if (typeof scheme.addListener === 'function') {

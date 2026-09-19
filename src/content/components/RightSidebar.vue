@@ -1,5 +1,6 @@
 <template>
   <aside
+    aria-label="文章大纲"
     class="mdr-right-side fixed top-54px right-14px bottom-14px z-30 flex flex-col bg-[--bg-card]/92 backdrop-blur-xl text-[--text-primary] rounded-2xl border border-[--border-color] shadow-lg select-none print:hidden overflow-hidden transition-[width,transform] duration-200"
     :style="{ width: `${width}px` }"
   >
@@ -61,7 +62,12 @@
         :style="{ paddingLeft: `${(item.level - 1) * 11 + 16}px` }"
         :class="{ 'font-semibold text-[--primary-color] bg-[--primary-light] shadow-xs': activeId === item.href.slice(1) }"
         :title="item.content"
+        role="option"
+        :aria-selected="activeId === item.href.slice(1)"
+        tabindex="0"
         @click="handleClick(item)"
+        @keydown.enter.prevent="handleClick(item)"
+        @keydown.space.prevent="handleClick(item)"
       >
         <!-- Active Pip on the Guide Line -->
         <span
@@ -189,7 +195,8 @@ function checkActiveHeadingOnScroll() {
   )
   if (headings.length === 0) return
 
-  const headerOffset = 64
+  // 与点击跳转保持同一 54px 顶栏偏移，避免高亮与落点差 10px 闪烁
+  const headerOffset = 54
   let currentId = ''
 
   for (let i = 0; i < headings.length; i++) {

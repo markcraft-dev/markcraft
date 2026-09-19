@@ -219,7 +219,7 @@ const isFullscreen = ref(false)
 
 const themeTitle = computed(() => {
   if (props.theme === 'light') return '当前: 明亮模式 (点击切换羊皮纸)'
-  if (props.theme === 'sepia') return '当前: 羊皮纸模式 (点击切换暗黑)'
+  if (props.theme === 'sepia') return '当前: 羊皮纸模式 (点击切换豆沙护眼)'
   if (props.theme === 'dark') return '当前: 暗黑极夜 (点击切换北欧冷雾)'
   if (props.theme === 'verdant') return '当前: 豆沙护眼 (点击切换深空极夜)'
   if (props.theme === 'nordic') return '当前: 北欧冷雾 (点击切换妖紫魅夜)'

@@ -51,7 +51,7 @@ cd native-host && ./install.sh   # then reload the extension in chrome://extensi
 
 ## Privacy
 
-MarkCraft is designed for local-first use. Before publishing, verify the extension’s actual permissions, file access behavior, and privacy policy against the current implementation.
+MarkCraft is local-first: document contents never leave your device. The extension requests two Chrome permissions — `storage` (settings only) and `nativeMessaging` (optional zero-dialog saves via the bundled file-writer host; inert when the host is not installed). Rendering runs entirely in the page; remote Markdown is fetched only for documents and folders you open, and responses are capped in size. Saving always targets the file you are viewing: silent overwrites use the previously authorized handle for that exact file URL, the native host refuses to create files or follow symlinks, and every other path asks you first. Note: custom CSS you paste into settings is injected into rendered pages as-is — avoid `@import` of remote URLs if you read sensitive local files.
 
 ## License
 

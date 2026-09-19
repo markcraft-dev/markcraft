@@ -5,7 +5,7 @@
         <IconLogo class="w-36px h-36px" />
         <div>
           <h3 class="font-bold text-16px">MarkCraft</h3>
-          <p class="text-12px text-[--muted-color]">v1.0.0 (Official Release)</p>
+          <p class="text-12px text-[--muted-color]">v1.0.1 (Official Release)</p>
         </div>
       </div>
       <p class="text-13px text-[--text-secondary] mb-16px leading-relaxed">

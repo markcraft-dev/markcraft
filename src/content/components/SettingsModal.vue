@@ -7,6 +7,9 @@
     >
       <!-- Centered Modal Card (Wide Desktop Layout) -->
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="MarkCraft 偏好设置"
         class="bg-[--bg-page]/95 backdrop-blur-2xl text-[--text-primary] max-w-680px w-full max-h-[88vh] rounded-2xl shadow-2xl border border-[--border-color] ring-1 ring-black/10 flex flex-col overflow-hidden animate-in"
       >
         <!-- Header -->
@@ -153,7 +156,7 @@
                 <SvgIcon name="info" class="w-3.5 h-3.5 text-[--text-muted]" />
                 <span class="font-semibold text-[--text-secondary] text-12px">关于与反馈</span>
               </div>
-              <span class="text-10px font-mono px-6px py-1px rounded bg-[--bg-subtle] text-[--text-secondary] font-semibold border border-[--border-subtle]">v1.0.0</span>
+              <span class="text-10px font-mono px-6px py-1px rounded bg-[--bg-subtle] text-[--text-secondary] font-semibold border border-[--border-subtle]">v1.0.1</span>
             </div>
 
             <div class="grid grid-cols-2 gap-8px text-12px">
@@ -299,17 +302,6 @@ const themeOptions: ThemeOption[] = [
     previewBorder: 'rgba(47, 90, 52, 0.2)',
     previewPrimary: '#3a7d44',
     previewText: '#2f3b30'
-  },
-  {
-    id: 'dark',
-    label: '深空极夜',
-    desc: '宇宙靛蓝沉浸夜览',
-    icon: 'moon',
-    iconColor: 'text-indigo-400',
-    previewBg: '#0b0f17',
-    previewBorder: 'rgba(255, 255, 255, 0.12)',
-    previewPrimary: '#60a5fa',
-    previewText: '#f1f5f9'
   },
   {
     id: 'nordic',

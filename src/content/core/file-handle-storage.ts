@@ -161,12 +161,21 @@ async function listStoredDirectories(): Promise<StoredDirectory[]> {
   return entries
 }
 
+/** 永不抛出的 decodeURIComponent：畸形 % 序列时回退原文，避免调用方静默跳过保存。 */
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
 /** 从文件 URL 中拆出目录 URL（含尾斜杠）与解码后的文件名。 */
 function splitFileUrl(fileUrl: string): { dirUrl: string; fileName: string } | null {
   const clean = fileUrl.split('#')[0].split('?')[0]
   const slash = clean.lastIndexOf('/')
   if (slash === -1) return null
-  const fileName = decodeURIComponent(clean.slice(slash + 1))
+  const fileName = safeDecode(clean.slice(slash + 1))
   if (!fileName) return null
   return { dirUrl: clean.slice(0, slash + 1), fileName }
 }
@@ -231,7 +240,7 @@ export async function trySilentSaveViaDirectory(fileUrl: string, content: string
       let current: FileSystemDirectoryHandle = entry.handle
       const rest = dirUrl.slice(entry.url.length)
       for (const segment of rest.split('/').filter(Boolean)) {
-        current = await current.getDirectoryHandle(decodeURIComponent(segment), { create: false })
+        current = await current.getDirectoryHandle(safeDecode(segment), { create: false })
       }
       const fileHandle = await current.getFileHandle(fileName, { create: false })
       if (await writeToFileHandle(fileHandle, content)) {

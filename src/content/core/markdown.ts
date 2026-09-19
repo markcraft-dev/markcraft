@@ -48,7 +48,7 @@ export function initMarkdownRenderer(activePlugins: string[] = [], pluginOptions
   const isEnabled = (name: string) => enabled.size === 0 || enabled.has(name)
   mermaidEnabled = isEnabled('Mermaid')
 
-  const md = new MarkdownIt({
+  const md: MarkdownIt = new MarkdownIt({
     // 安全：内容脚本按设计渲染不可信的远程/本地文档。html:false 使源文档中的
     // 原始 HTML 被转义为纯文本展示，渲染产物只包含渲染器自身生成的标记，
     // 配合 v-html 也不会注入宿主页可执行的脚本（raw HTML 渲染不支持且默认关闭）。

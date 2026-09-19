@@ -64,6 +64,9 @@ const iconRegistry: Record<string, string> = {
 
 const svg = computed(() => {
   const filename = iconRegistry[props.name]
+  if (!filename && import.meta.env.DEV) {
+    console.warn(`[MarkCraft] Unknown SvgIcon name: "${props.name}"`)
+  }
   return filename ? iconSources[`../assets/icon_assets/${filename}`] ?? '' : ''
 })
 </script>

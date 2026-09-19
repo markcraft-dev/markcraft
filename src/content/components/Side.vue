@@ -90,7 +90,7 @@
         <span>设置</span>
       </button>
 
-      <span class="font-mono text-11px font-medium text-[--text-muted]">v1.0.0</span>
+      <span class="font-mono text-11px font-medium text-[--text-muted]">v1.0.1</span>
     </div>
 
     <!-- Drag Splitter -->
