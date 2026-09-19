@@ -9,6 +9,8 @@ export interface WasmAnalyzer {
   ancestor_folder_urls: (rootUrl: string, targetFileUrl: string) => unknown
   build_outline: (headings: unknown, maxLevel: number) => unknown
   search_palette: (files: unknown, headings: unknown, query: string) => unknown
+  fulltext_index_build: (docs: unknown) => unknown
+  fulltext_search: (query: string, limit: number) => unknown
   dom_to_markdown: (dom: unknown) => unknown
   doc_stats: (raw: string) => unknown
 }

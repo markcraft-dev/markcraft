@@ -9,6 +9,8 @@ export interface PaletteItem {
   href: string
   subPath?: string
   isHeading?: boolean
+  /** 全文命中摘要 HTML（转义文本 + <mark>，见 search-index.renderSnippetHtml） */
+  snippetHtml?: string
 }
 
 // 与 Rust 端常量保持一致：空查询推荐 12 条，关键词过滤后最多 16 条

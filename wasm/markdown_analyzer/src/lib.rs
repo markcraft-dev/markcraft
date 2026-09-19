@@ -2,10 +2,11 @@
 //!
 //! JavaScript 层负责 DOM 读取、网络与浏览器 API；所有纯算法集中在
 //! 本 crate：目录解析与过滤、标题 slug 与大纲、DOM 快照转 Markdown、
-//! 快捷搜索、文档统计。
+//! 快捷搜索、文档统计、全文检索。
 
 mod directory;
 mod dommd;
+mod fulltext;
 mod outline;
 mod palette;
 mod slug;
@@ -13,6 +14,7 @@ mod stats;
 
 use wasm_bindgen::prelude::*;
 
+use crate::fulltext::FulltextDoc;
 use crate::outline::{HeadingInput, OutlineResult};
 use crate::palette::{PaletteFileNode, PaletteHeading, PaletteResult};
 
@@ -75,4 +77,19 @@ pub fn dom_to_markdown(dom: JsValue) -> Result<String, JsValue> {
 #[wasm_bindgen]
 pub fn doc_stats(raw: &str) -> Result<JsValue, JsValue> {
     to_value(&stats::doc_stats(raw))
+}
+
+/// 全文检索建索引：`docs` 为 `[{href, title, body}]`，返回收录文档数。
+/// 索引常驻 WASM 内存，JS 侧按工作区签名决定重建时机。
+#[wasm_bindgen]
+pub fn fulltext_index_build(docs: JsValue) -> Result<u32, JsValue> {
+    let parsed: Vec<FulltextDoc> = serde_wasm_bindgen::from_value(docs)?;
+    Ok(fulltext::fulltext_index_build(parsed))
+}
+
+/// 全文检索：返回 ranked hits `[{href, title, snippet, highlights, score}]`。
+/// 注意：wasm-bindgen 将 i64 映射为 BigInt，limit 用 u32 以便 JS 直接传 number。
+#[wasm_bindgen]
+pub fn fulltext_search(query: &str, limit: u32) -> Result<JsValue, JsValue> {
+    to_value(&fulltext::fulltext_search(query, limit as usize))
 }

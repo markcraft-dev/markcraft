@@ -30,16 +30,49 @@
           />
           <div class="flex items-center gap-6px">
             <span v-if="query" class="text-11px text-[--text-muted] font-mono mr-4px">
-              找到 {{ filteredItems.length }} 项
+              找到 {{ activeListLength }} 项
             </span>
             <kbd class="mdr-kbd text-10px font-mono">ESC</kbd>
           </div>
         </div>
 
+        <!-- Tab Switcher: 文件/章节 vs 全文检索 -->
+        <div class="flex items-center gap-6px px-12px pt-8px" role="tablist" aria-label="搜索模式">
+          <button
+            role="tab"
+            :aria-selected="activeTab === 'files'"
+            class="px-10px py-4px rounded-lg text-12px font-medium transition-colors cursor-pointer border-0 outline-none"
+            :class="activeTab === 'files'
+              ? 'bg-[--primary-light] text-[--primary-color]'
+              : 'text-[--text-muted] hover:text-[--text-primary] hover:bg-[--bg-hover]'"
+            @click="switchTab('files')"
+          >
+            文件 / 章节
+          </button>
+          <button
+            role="tab"
+            :aria-selected="activeTab === 'content'"
+            class="px-10px py-4px rounded-lg text-12px font-medium transition-colors cursor-pointer border-0 outline-none flex items-center gap-5px"
+            :class="activeTab === 'content'
+              ? 'bg-[--primary-light] text-[--primary-color]'
+              : 'text-[--text-muted] hover:text-[--text-primary] hover:bg-[--bg-hover]'"
+            @click="switchTab('content')"
+          >
+            全文
+            <span
+              v-if="activeTab === 'content' && fulltextHits.length > 0"
+              class="text-10px font-mono px-4px rounded-full bg-[--primary-color]/15"
+            >{{ fulltextHits.length }}</span>
+          </button>
+          <span v-if="activeTab === 'content' && ftStatusText" class="ml-auto text-10px font-mono text-[--text-muted]">
+            {{ ftStatusText }}
+          </span>
+        </div>
+
         <!-- Scrollable Search Results List -->
         <div class="max-h-[min(58vh,520px)] overflow-y-auto p-10px flex flex-col gap-3px">
           <!-- Files & Outline Section -->
-          <div v-if="filteredItems.length > 0">
+          <div v-if="activeTab === 'files' && filteredItems.length > 0">
             <div class="px-12px py-6px text-11px font-semibold text-[--text-muted] uppercase tracking-wider flex items-center justify-between">
               <span>{{ query ? '匹配结果' : '最近与推荐文件' }}</span>
               <span class="text-10px font-normal opacity-70">支持 ↑ ↓ 导航，Enter 确认</span>
@@ -85,9 +118,78 @@
           </div>
 
           <!-- Empty State -->
-          <div v-else-if="query" class="flex flex-col items-center justify-center p-36px text-center text-13px text-[--text-muted]">
+          <div v-else-if="activeTab === 'files' && query" class="flex flex-col items-center justify-center p-36px text-center text-13px text-[--text-muted]">
             <SvgIcon name="search" class="w-8 h-8 mb-8px opacity-20 text-[--text-muted]" />
             <span>未找到与 “{{ query }}” 相关的 Markdown 文件或章节</span>
+          </div>
+
+          <!-- Full-text Section (R7: WASM 倒排索引，标题加权) -->
+          <div v-else-if="activeTab === 'content'">
+            <div class="px-12px py-6px text-11px font-semibold text-[--text-muted] uppercase tracking-wider flex items-center justify-between">
+              <span>全文匹配</span>
+              <span class="text-10px font-normal opacity-70">支持 ↑ ↓ 导航，Enter 确认</span>
+            </div>
+
+            <div v-if="ftStatus.state === 'unsupported'" class="flex flex-col items-center justify-center p-36px text-center text-13px text-[--text-muted]">
+              <SvgIcon name="search" class="w-8 h-8 mb-8px opacity-20 text-[--text-muted]" />
+              <span>全文检索仅支持本地文件夹（file://）</span>
+            </div>
+
+            <div v-else-if="ftStatus.state === 'indexing'" class="flex flex-col items-center justify-center p-36px text-center text-13px text-[--text-muted]">
+              <SvgIcon name="search" class="w-8 h-8 mb-8px opacity-20 text-[--text-muted] animate-pulse" />
+              <span>正在建立全文索引 {{ ftStatus.indexed }}/{{ ftStatus.total }}…</span>
+            </div>
+
+            <div v-else-if="!query" class="flex flex-col items-center justify-center p-36px text-center text-13px text-[--text-muted]">
+              <SvgIcon name="search" class="w-8 h-8 mb-8px opacity-20 text-[--text-muted]" />
+              <span>输入关键词搜索全部文档正文（标题加权优先）</span>
+            </div>
+
+            <template v-else-if="fulltextHits.length > 0">
+              <div
+                v-for="(item, cIdx) in fulltextHits"
+                :key="item.id || item.href"
+                class="flex items-center justify-between px-12px py-9px rounded-xl cursor-pointer transition-all select-none group"
+                :class="selectedIndex === cIdx
+                  ? 'bg-[--bg-hover] text-[--text-primary] font-medium shadow-xs ring-1 ring-[--primary-color]/40'
+                  : 'text-[--text-secondary] hover:bg-[--bg-hover] hover:text-[--text-primary]'"
+                @mouseenter="selectedIndex = cIdx"
+                @click="handleItemClick(item)"
+              >
+                <!-- File Name + Snippet -->
+                <div class="flex items-center gap-10px min-w-0 flex-1 mr-14px">
+                  <span class="p-5px rounded-lg bg-[--bg-subtle] border border-[--border-subtle] flex-shrink-0">
+                    <SvgIcon name="file-markdown" class="w-4 h-4 text-blue-500" />
+                  </span>
+
+                  <div class="flex flex-col min-w-0">
+                    <div class="flex items-center gap-8px">
+                      <span class="text-13px font-semibold text-[--text-primary] truncate tracking-tight">{{ item.title }}</span>
+                    </div>
+                    <span v-if="item.subPath" class="text-11px text-[--text-muted] truncate font-mono mt-1px">
+                      {{ item.subPath }}
+                    </span>
+                    <!-- 摘要 HTML 安全构造：转义文本 + <mark>（search-index.renderSnippetHtml） -->
+                    <div v-if="item.snippetHtml" class="mdr-ft-snippet" v-html="item.snippetHtml"></div>
+                  </div>
+                </div>
+
+                <!-- Action Indicator Pill -->
+                <div class="flex items-center gap-6px flex-shrink-0">
+                  <span
+                    v-if="selectedIndex === cIdx"
+                    class="text-11px font-mono text-[--primary-color] px-8px py-3px rounded-md bg-[--primary-light] font-semibold flex items-center gap-4px border border-[--primary-color]/25 shadow-xs"
+                  >
+                    ↵ 打开
+                  </span>
+                </div>
+              </div>
+            </template>
+
+            <div v-else class="flex flex-col items-center justify-center p-36px text-center text-13px text-[--text-muted]">
+              <SvgIcon name="search" class="w-8 h-8 mb-8px opacity-20 text-[--text-muted]" />
+              <span>正文中未找到 “{{ query }}”</span>
+            </div>
           </div>
 
           <!-- Quick Actions Section -->
@@ -100,10 +202,10 @@
               v-for="(action, aIdx) in actions"
               :key="action.id"
               class="flex items-center justify-between px-12px py-8px rounded-xl cursor-pointer text-13px transition-all select-none group"
-              :class="selectedIndex === filteredItems.length + aIdx
+              :class="selectedIndex === activeListLength + aIdx
                 ? 'bg-[--bg-hover] text-[--text-primary] font-medium shadow-xs ring-1 ring-[--primary-color]/40'
                 : 'text-[--text-secondary] hover:bg-[--bg-hover] hover:text-[--text-primary]'"
-              @mouseenter="selectedIndex = filteredItems.length + aIdx"
+              @mouseenter="selectedIndex = activeListLength + aIdx"
               @click="handleActionClick(action)"
             >
               <div class="flex items-center gap-10px">
@@ -137,6 +239,14 @@
 import SvgIcon from '@/components/SvgIcon.vue'
 import { ref, computed, watch, nextTick } from 'vue'
 import { searchPalette, type PaletteItem } from '../core/palette'
+import {
+  ensureFulltextIndex,
+  searchFulltext,
+  renderSnippetHtml,
+  getFulltextStatus,
+  FULLTEXT_LIMIT,
+  type FulltextStatus
+} from '../core/search-index'
 import type { TreeNodeItem, OutlineItem } from '@/shared/types'
 
 export type { PaletteItem }
@@ -157,6 +267,22 @@ const emit = defineEmits<{
 const query = ref('')
 const selectedIndex = ref(0)
 const inputRef = ref<HTMLInputElement | null>(null)
+// R7 全文 tab：'files' 为既有文件名/章节搜索，'content' 为 WASM 全文检索
+const activeTab = ref<'files' | 'content'>('files')
+const fulltextHits = ref<PaletteItem[]>([])
+const ftStatus = ref<FulltextStatus>(getFulltextStatus())
+const ftElapsed = ref(0)
+const ftViaWasm = ref(true)
+let ftDebounce: number | null = null
+
+const ftStatusText = computed(() => {
+  if (activeTab.value !== 'content') return ''
+  if (ftStatus.value.state === 'indexing') return `索引 ${ftStatus.value.indexed}/${ftStatus.value.total}`
+  if (ftStatus.value.state === 'ready' && query.value.trim()) {
+    return `${fulltextHits.value.length} 项 · ${ftElapsed.value.toFixed(0)} ms${ftViaWasm.value ? '' : ' · JS'}`
+  }
+  return ''
+})
 
 const actions = [
   { id: 'copy-rich', title: '一键复制富文本 (微信/知乎排版)', shortcut: '⌥C', icon: 'copy' },
@@ -173,9 +299,49 @@ const actions = [
 const filteredItems = ref<PaletteItem[]>([])
 let searchSeq = 0
 
+async function runContentSearch(): Promise<void> {
+  const q = query.value
+  if (!q.trim()) {
+    fulltextHits.value = []
+    return
+  }
+  const status = await ensureFulltextIndex(props.files)
+  ftStatus.value = status
+  if (status.state !== 'ready') {
+    fulltextHits.value = []
+    return
+  }
+  const { hits, elapsedMs, viaWasm } = await searchFulltext(q, FULLTEXT_LIMIT)
+  // 异步往返期间查询/tab 可能已变：过期结果直接丢弃
+  if (q !== query.value || activeTab.value !== 'content') return
+  ftElapsed.value = elapsedMs
+  ftViaWasm.value = viaWasm
+  fulltextHits.value = hits.map((h) => ({
+    id: h.href,
+    title: h.title,
+    href: h.href,
+    subPath: '全文匹配',
+    snippetHtml: renderSnippetHtml(h.snippet, h.highlights)
+  }))
+}
+
+function switchTab(tab: 'files' | 'content'): void {
+  if (activeTab.value === tab) return
+  activeTab.value = tab
+  selectedIndex.value = 0
+}
+
 watch(
-  [() => props.visible, () => props.files, () => props.headings, query],
+  [() => props.visible, () => props.files, () => props.headings, query, activeTab],
   async () => {
+    if (activeTab.value === 'content') {
+      // 全文检索防抖 150ms：索引查询本身为内存操作，防抖主要省 bg-fetch 建索引期的重复触发
+      if (ftDebounce !== null) window.clearTimeout(ftDebounce)
+      ftDebounce = window.setTimeout(() => {
+        void runContentSearch()
+      }, 150)
+      return
+    }
     const seq = ++searchSeq
     const items = await searchPalette(props.files, props.headings, query.value)
     if (seq === searchSeq) {
@@ -188,7 +354,11 @@ watch(
   { immediate: true }
 )
 
-const totalCount = computed(() => filteredItems.value.length + actions.length)
+// 当前 tab 的结果条数：键盘导航与计数共用
+const activeListLength = computed(() =>
+  activeTab.value === 'content' ? fulltextHits.value.length : filteredItems.value.length
+)
+const totalCount = computed(() => activeListLength.value + actions.length)
 
 function moveSelection(delta: number) {
   const max = totalCount.value
@@ -197,11 +367,11 @@ function moveSelection(delta: number) {
 }
 
 function selectCurrent() {
-  const filesLen = filteredItems.value.length
-  if (selectedIndex.value < filesLen) {
-    handleItemClick(filteredItems.value[selectedIndex.value])
+  const list = activeTab.value === 'content' ? fulltextHits.value : filteredItems.value
+  if (selectedIndex.value < list.length) {
+    handleItemClick(list[selectedIndex.value])
   } else {
-    const action = actions[selectedIndex.value - filesLen]
+    const action = actions[selectedIndex.value - list.length]
     if (action) handleActionClick(action)
   }
 }
@@ -226,13 +396,42 @@ watch(
     if (val) {
       query.value = ''
       selectedIndex.value = 0
+      activeTab.value = 'files'
+      fulltextHits.value = []
+      ftElapsed.value = 0
+      ftStatus.value = getFulltextStatus()
       nextTick(() => inputRef.value?.focus())
+      // 预热全文索引：打开面板即后台建索引，切到全文 tab 时多半已就绪
+      void ensureFulltextIndex(props.files).then((s) => {
+        ftStatus.value = s
+      })
+    } else if (ftDebounce !== null) {
+      window.clearTimeout(ftDebounce)
+      ftDebounce = null
     }
   }
 )
 </script>
 
 <style scoped>
+.mdr-ft-snippet {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 2px;
+  white-space: normal;
+}
+.mdr-ft-snippet :deep(.mdr-ft-mark) {
+  background: var(--primary-light);
+  color: var(--primary-color);
+  border-radius: 3px;
+  padding: 0 1px;
+  font-weight: 600;
+}
 .modal-fade-enter-active,
 .modal-fade-leave-active {
   transition: opacity 0.15s ease, transform 0.15s ease;
