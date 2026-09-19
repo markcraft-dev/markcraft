@@ -10,6 +10,8 @@ MarkCraft 是一款以隐私优先为理念的 Chrome 扩展，用于直接在�
 - 在原页面内编辑文档，并在用户明确授权后保存到本地
 - 渲染代码块、Mermaid 图表、数学公式、图片、表格和任务列表
 - 浏览本地 Markdown 文件夹，使用搜索和文档大纲快速定位内容
+- 通过 ⌘K 命令面板、大纲 ScrollSpy 联动和回到顶部按钮在文档与标题间快速跳转
+- 导出自包含 HTML 单文件、打印为 PDF，或复制富文本粘贴到博客与文档中
 - 自定义主题、字体、内容宽度和 Markdown 插件
 - 文档内容和设置保留在用户的浏览器与设备本地
 
@@ -19,6 +21,7 @@ MarkCraft 是一款以隐私优先为理念的 Chrome 扩展，用于直接在�
 
 1. 从最新 release 下载 `markcraft-vX.Y.Z.zip` 并解压。
 2. 打开 `chrome://extensions`，开启右上角「开发者模式」，点击「加载已解压的扩展程序」，选择解压出的 `markcraft` 文件夹。
+3. 如需渲染本地文件，点击 MarkCraft 卡片上的「详细信息」，开启「允许访问文件网址」——否则 Chrome 会在 `file://` 页面上拦截扩展，文档只能显示为纯文本。
 
 ## 开发
 
@@ -44,6 +47,7 @@ cd native-host && ./install.sh   # 安装后在 chrome://extensions 中重新加
 - [代码库全量分析](docs/codebase_analysis.zh-CN.md)
 - [性能优化说明](docs/performance_optimization.zh-CN.md) / [Performance notes](docs/performance_optimization.md)
 - [渲染管线复核](docs/rendering_review.zh-CN.md)
+- [产品计划 (Product plan)](docs/product-plan.md)
 
 ## 隐私
 

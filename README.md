@@ -10,6 +10,8 @@ It provides a polished Markdown reading experience with in-browser WYSIWYG editi
 - Edit documents in place and save them locally with explicit user permission
 - Render code blocks, Mermaid diagrams, mathematical formulas, images, tables, and task lists
 - Browse local Markdown folders with search and document outlines
+- Jump through documents and headings with the ⌘K command palette, outline ScrollSpy, and back-to-top control
+- Export a self-contained HTML file, print to PDF, or copy rich text for pasting into blogs and docs
 - Customize themes, fonts, content width, and Markdown plugins
 - Keep document contents and settings local to the user’s browser and device
 
@@ -19,6 +21,7 @@ No build tools needed — grab a prebuilt package from [Releases](https://github
 
 1. Download `markcraft-vX.Y.Z.zip` from the latest release and unzip it.
 2. Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the unzipped `markcraft` folder.
+3. To render local files, click **Details** on the MarkCraft card and enable **Allow access to file URLs** — without this, Chrome blocks the extension on `file://` pages and documents show as raw text.
 
 ## Development
 
@@ -44,6 +47,7 @@ cd native-host && ./install.sh   # then reload the extension in chrome://extensi
 - [Codebase analysis (中文)](docs/codebase_analysis.zh-CN.md)
 - [Performance notes](docs/performance_optimization.md) / [Performance notes (中文)](docs/performance_optimization.zh-CN.md)
 - [Rendering review (中文)](docs/rendering_review.zh-CN.md)
+- [Product plan](docs/product-plan.md)
 
 ## Privacy
 
