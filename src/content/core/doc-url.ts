@@ -55,6 +55,16 @@ function toAbsoluteDocHref(candidate: string, base: string): string | null {
   }
 }
 
+// Path tolerance (R4): links copied out of chats often carry trailing junk —
+// "…/notes.md)" / "…/notes.md）" / "…/notes.md。" / "…/notes.md." /
+// "…/notes.md>" / '"…/notes.md"' / "…/notes.md!" — while a valid document URL
+// never ends with these characters. Pure: safe to unit-test in Node.
+const TRAILING_JUNK_RE = /[)）>"'"'’.。!！?？,，;；:：\]】]+$/u
+export function stripTrailingJunk(candidate: string): string {
+  if (!candidate) return candidate
+  return candidate.replace(TRAILING_JUNK_RE, '')
+}
+
 /** A doc pointer must be a fetchable markdown file, never a directory listing. */
 export function isMarkdownDocHref(href: string): boolean {
   try {
@@ -80,7 +90,7 @@ export function parseDocUrl(url: string): ParsedDocUrl {
     const parsed = new URL(url, window.location.href)
     const queryDoc = parsed.searchParams.get(DOC_QUERY_PARAM)
     if (queryDoc) {
-      const resolved = toAbsoluteDocHref(safeDecode(queryDoc), url)
+      const resolved = toAbsoluteDocHref(stripTrailingJunk(safeDecode(queryDoc)), url)
       const anchor = parsed.hash && !parsed.hash.startsWith(DOC_HASH_PREFIX) ? parsed.hash : null
       return { docHref: resolved && isMarkdownDocHref(resolved) ? resolved : null, anchor }
     }
@@ -89,7 +99,7 @@ export function parseDocUrl(url: string): ParsedDocUrl {
       const ampIndex = rest.indexOf('&a=')
       const docPart = ampIndex === -1 ? rest : rest.slice(0, ampIndex)
       const anchorPart = ampIndex === -1 ? '' : rest.slice(ampIndex + 3)
-      const resolved = toAbsoluteDocHref(safeDecode(docPart), url)
+      const resolved = toAbsoluteDocHref(stripTrailingJunk(safeDecode(docPart)), url)
       const anchor = anchorPart ? `#${safeDecode(anchorPart).replace(/^#+/, '')}` : null
       return { docHref: resolved && isMarkdownDocHref(resolved) ? resolved : null, anchor }
     }
@@ -163,23 +173,25 @@ const DOC_FETCH_RETRY_DELAYS_MS = [250, 800]
  * Returns null when every attempt fails (caller falls back to navigation).
  */
 export function fetchDocContent(href: string): Promise<string | null> {
+  const attemptUrl = (url: string): Promise<{ ok?: boolean; res?: string; msg?: string }> =>
+    new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: 'bg-fetch', url }, (r) => {
+          const lastErrorMsg = chrome.runtime.lastError?.message || ''
+          if (lastErrorMsg) {
+            resolve({ ok: false, msg: lastErrorMsg })
+            return
+          }
+          resolve(r || { ok: false, msg: 'empty bg-fetch response' })
+        })
+      } catch (e) {
+        resolve({ ok: false, msg: e instanceof Error ? e.message : String(e) })
+      }
+    })
   return (async (): Promise<string | null> => {
     let lastMsg = ''
     for (let attempt = 1; attempt <= DOC_FETCH_MAX_ATTEMPTS; attempt += 1) {
-      const res = await new Promise<{ ok?: boolean; res?: string; msg?: string }>((resolve) => {
-        try {
-          chrome.runtime.sendMessage({ type: 'bg-fetch', url: href }, (r) => {
-            const lastErrorMsg = chrome.runtime.lastError?.message || ''
-            if (lastErrorMsg) {
-              resolve({ ok: false, msg: lastErrorMsg })
-              return
-            }
-            resolve(r || { ok: false, msg: 'empty bg-fetch response' })
-          })
-        } catch (e) {
-          resolve({ ok: false, msg: e instanceof Error ? e.message : String(e) })
-        }
-      })
+      const res = await attemptUrl(href)
       if (res?.ok && res.res !== undefined) return res.res
       lastMsg = res?.msg || ''
       if (attempt < DOC_FETCH_MAX_ATTEMPTS) {
@@ -188,6 +200,15 @@ export function fetchDocContent(href: string): Promise<string | null> {
         )
         await sleep(DOC_FETCH_RETRY_DELAYS_MS[attempt - 1] ?? 500)
       }
+    }
+    // Path tolerance (R4): the normal path above is untouched; only on total
+    // failure, retry ONCE with trailing junk stripped (chat-copied links).
+    const stripped = stripTrailingJunk(href)
+    if (stripped && stripped !== href) {
+      console.warn(`[MarkCraft] retrying doc fetch with stripped URL: ${stripped}`)
+      const retry = await attemptUrl(stripped)
+      if (retry?.ok && retry.res !== undefined) return retry.res
+      lastMsg = retry?.msg || lastMsg
     }
     console.error(`[MarkCraft] doc fetch gave up after ${DOC_FETCH_MAX_ATTEMPTS} attempts: ${href} (${lastMsg || 'unknown error'})`)
     return null

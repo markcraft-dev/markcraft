@@ -54,6 +54,7 @@
         <div class="mdr-container mx-auto px-28px sm:px-44px py-36px max-w-[var(--content-max-width,900px)]">
           <!-- Rendered Markdown HTML Reading & In-Place WYSIWYG Article -->
           <article
+            v-if="!isRawView"
             ref="contentRef"
             class="mdr-content transition-all"
             :class="{ 'mdr-in-place-editing': isEditMode }"
@@ -62,6 +63,11 @@
             v-html="renderedHtml"
             @input="handleInPlaceInput"
           ></article>
+          <!-- R5 RAW source view: plain pre over the held raw markdown, no refetch -->
+          <pre
+            v-else
+            class="mdr-raw-view"
+          >{{ rawMarkdownContent }}</pre>
         </div>
       </main>
 
@@ -77,6 +83,58 @@
 
     <!-- Bottom Right Floating Back to Top with Scroll Progress -->
     <BackToTop />
+
+    <!-- R5 RAW toggle: floating pill, bottom-left to avoid the BackToTop corner -->
+    <button
+      v-if="!isEditMode"
+      class="fixed bottom-24px left-16px z-40 px-12px py-6px rounded-full text-11px font-mono font-semibold cursor-pointer border transition-opacity"
+      :class="isRawView
+        ? 'bg-[--primary-color] text-white border-transparent shadow-lg'
+        : 'bg-[--bg-subtle]/90 text-[--text-secondary] border-[--border-color] hover:text-[--text-primary] backdrop-blur'"
+      :title="isRawView
+        ? pickCopy('返回渲染视图 (⌘/Ctrl+Shift+M)', 'Back to rendered view (⌘/Ctrl+Shift+M)')
+        : pickCopy('查看源码 (⌘/Ctrl+Shift+M)', 'View source (⌘/Ctrl+Shift+M)')"
+      @click="toggleRawView"
+    >
+      {{ isRawView ? pickCopy('预览', 'Preview') : 'RAW' }}
+    </button>
+
+    <!-- R2 60s tour bubble -->
+    <TourBubble
+      v-if="tourVisible"
+      :step="tourStep"
+      :total="TOUR_STEPS.length"
+      :title="tourTitle"
+      :body="tourBody"
+      :shortcut="tourShortcut"
+      :is-first="tourStep === 0"
+      :is-last="tourStep === TOUR_STEPS.length - 1"
+      @next="tourNext"
+      @prev="tourPrev"
+      @skip="finishTour"
+    />
+
+    <!-- R2 save-back nudge: dialog-free native-host option, dismissible forever -->
+    <transition name="toast-fade">
+      <div
+        v-if="saveNudgeVisible"
+        class="fixed bottom-150px left-1/2 -translate-x-1/2 z-50 w-[min(460px,92vw)] px-14px py-10px rounded-xl bg-[#18181b] text-white text-12px shadow-2xl border border-white/10 flex items-center gap-10px"
+      >
+        <span class="flex-1 leading-relaxed">{{ saveNudgeText }}</span>
+        <a
+          class="flex-shrink-0 underline underline-offset-2 text-white/85 hover:text-white"
+          :href="NATIVE_HOST_README_URL"
+          target="_blank"
+          rel="noopener"
+        >{{ pickCopy('查看说明', 'Docs') }}</a>
+        <button
+          class="flex-shrink-0 px-8px py-3px rounded-lg bg-white/15 hover:bg-white/25 text-white text-11px cursor-pointer border-0"
+          @click="dismissSaveNudge"
+        >
+          {{ saveNudgeDismissLabel }}
+        </button>
+      </div>
+    </transition>
 
     <!-- Centered Search Command Palette (Screenshot 3 - Cmd+K) -->
     <SearchPaletteModal
@@ -126,6 +184,16 @@ import BackToTop from './components/BackToTop.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import SearchPaletteModal, { type PaletteItem } from './components/SearchPaletteModal.vue'
 import ImageLightbox from './components/ImageLightbox.vue'
+import TourBubble from './components/TourBubble.vue'
+import {
+  hasSeenFlag,
+  setSeenFlag,
+  pickCopy,
+  TOUR_STEPS,
+  SEEN_TOUR_KEY,
+  SEEN_SAVE_NUDGE_KEY,
+  NATIVE_HOST_README_URL
+} from './core/onboarding'
 import { renderMarkdown, renderMermaidDiagrams, rerenderMermaidDiagrams } from './core/markdown'
 import { extractOutline } from './core/outline'
 import { applyTheme, applyCustomStyles } from './core/theme'
@@ -137,6 +205,7 @@ import {
   loadScrollPosition,
   readCurrentScrollY,
   restoreScrollPosition,
+  saveScrollPosition,
   scheduleSaveScrollPosition
 } from './core/scroll-memory'
 import {
@@ -202,9 +271,13 @@ function updateReadingProgress() {
 
 // Window scroll handler: refresh the header progress and debounce-persist the
 // offset under the active document so each file keeps its own place.
+// The tour suppresses saves so highlighting bubbles never pollute memory.
+let suppressScrollSave = false
 function handleWindowScroll() {
   updateReadingProgress()
-  scheduleSaveScrollPosition(currentActiveHref.value)
+  if (!suppressScrollSave) {
+    scheduleSaveScrollPosition(currentActiveHref.value)
+  }
 }
 
 // Scroll-switch epoch: bumped on every document switch so a superseded
@@ -317,6 +390,73 @@ function showToast(msg: string) {
   }, 2800)
 }
 
+// R5 RAW source toggle (MarkView parity): instant switch between the rendered
+// view and the `pre` source text. Reuses the already-held rawMarkdownContent
+// (zero refetch) and restores the same scroll-memory key after the DOM swap.
+const isRawView = ref(false)
+function toggleRawView() {
+  if (isEditMode.value) {
+    showToast(pickCopy('请先退出编辑模式再查看源码', 'Exit edit mode before viewing source'))
+    return
+  }
+  saveScrollPosition(currentActiveHref.value, readCurrentScrollY())
+  isRawView.value = !isRawView.value
+  void nextTick().then(async () => {
+    const saved = await loadScrollPosition(currentActiveHref.value)
+    window.scrollTo(0, saved ?? 0)
+    updateReadingProgress()
+  })
+}
+
+// R2 60s tour: four stops, skippable, first-run only. Scroll-save stays
+// suppressed while the tour is active so it never pollutes scroll memory.
+const tourVisible = ref(false)
+const tourStep = ref(0)
+const tourTitle = computed(() => {
+  const s = TOUR_STEPS[tourStep.value]
+  return s ? pickCopy(s.titleZh, s.titleEn) : ''
+})
+const tourBody = computed(() => {
+  const s = TOUR_STEPS[tourStep.value]
+  return s ? pickCopy(s.bodyZh, s.bodyEn) : ''
+})
+const tourShortcut = computed(() => TOUR_STEPS[tourStep.value]?.shortcut || '')
+function startTour() {
+  suppressScrollSave = true
+  tourStep.value = 0
+  tourVisible.value = true
+}
+function finishTour() {
+  tourVisible.value = false
+  suppressScrollSave = false
+  void setSeenFlag(SEEN_TOUR_KEY)
+}
+function tourNext() {
+  if (tourStep.value >= TOUR_STEPS.length - 1) {
+    finishTour()
+  } else {
+    tourStep.value += 1
+  }
+}
+function tourPrev() {
+  if (tourStep.value > 0) tourStep.value -= 1
+}
+
+// R2 save-back nudge: shown once when a save reaches the manual-authorization
+// path (no silent handle, no native host). Dismissible forever.
+const saveNudgeVisible = ref(false)
+const saveNudgeText = computed(() =>
+  pickCopy(
+    '直接写回需要先授权。想以后免弹窗保存，可安装本机写入助手（见 native-host 说明）。',
+    'Writing back needs a one-time authorization. To skip dialogs entirely, install the native host helper (see native-host docs).'
+  )
+)
+const saveNudgeDismissLabel = computed(() => pickCopy('不再提示', 'Don’t remind me'))
+function dismissSaveNudge() {
+  saveNudgeVisible.value = false
+  void setSeenFlag(SEEN_SAVE_NUDGE_KEY)
+}
+
 // Auto-reload on file change (P1-1): opt-in via settings, local files only.
 // Rendering goes through the same-document handleContentChange path, so the
 // live scroll offset is preserved; edit mode / unsaved changes pause polling.
@@ -419,6 +559,11 @@ async function saveInPlace(): Promise<boolean> {
 
   // 3. 首次授权：让用户选择文档所在文件夹（readwrite）。
   //    目录句柄持久化后，该文件夹内所有文件均静默覆盖保存，不再弹任何对话框。
+  // R2 save-back nudge: silent + native both unavailable — surface the
+  // dialog-free native-host option once (dismissible, non-blocking).
+  if (!(await hasSeenFlag(SEEN_SAVE_NUDGE_KEY))) {
+    saveNudgeVisible.value = true
+  }
   if ('showDirectoryPicker' in window) {
     try {
       const dirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite', id: 'markcraft-workspace' })
@@ -692,7 +837,9 @@ function handleGlobalKeydown(e: KeyboardEvent) {
     const allowToggleSearch = inApp && isMeta && key === 'k'
     const inEditor = inApp && !!contentRef.value && (target === contentRef.value || contentRef.value.contains(target))
     const allowSave = inEditor && isMeta && key === 's'
-    if (!allowToggleSearch && !allowSave) return
+    // R5 RAW toggle is allowed from inputs too (it never steals text).
+    const allowRaw = inApp && isMeta && e.shiftKey && key === 'm'
+    if (!allowToggleSearch && !allowSave && !allowRaw) return
   }
 
   const isMeta = e.metaKey || e.ctrlKey
@@ -708,6 +855,10 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   } else if (isMeta && e.key.toLowerCase() === 'e') {
     e.preventDefault()
     toggleEditMode()
+  } else if (isMeta && e.shiftKey && e.key.toLowerCase() === 'm') {
+    // R5: RAW source toggle (manifest commands use Alt+Shift+*; no clash).
+    e.preventDefault()
+    toggleRawView()
   } else if (isMeta && e.key.toLowerCase() === 's') {
     if (isEditMode.value) {
       e.preventDefault()
@@ -799,6 +950,11 @@ onMounted(async () => {
     rightSideOpen.value = false
   }
 
+  // R2 tour: first run only, after the document (and its scroll) settled.
+  if (!(await hasSeenFlag(SEEN_TOUR_KEY))) {
+    startTour()
+  }
+
   if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
     chrome.storage.onChanged.addListener(handleStorageChanges)
   }
@@ -830,6 +986,21 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* R5 RAW source view: plain pre over the held markdown, theme-aware */
+.mdr-raw-view {
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* In-Place WYSIWYG Editing Styles */
 .mdr-in-place-editing {
   outline: none;

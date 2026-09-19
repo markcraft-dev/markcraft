@@ -62,6 +62,14 @@
         </button>
       </div>
 
+      <!-- No-file-access guide (R2 heuristic, 4th state): local + empty + no
+        failure most likely means "Allow access to file URLs" is off. The copy
+        covers the genuinely-empty case too ("dismiss if you already enabled
+        it"); once dismissed we fall through to the plain empty state. -->
+      <div v-else-if="showNoFileAccess" class="rounded-xl border border-[--border-color] bg-[--bg-subtle]/50 mx-2px">
+        <OnboardingCard @dismiss="dismissFileAccessHint" />
+      </div>
+
       <!-- Empty Folder State (only when load succeeded but no Markdown found) -->
       <div v-else-if="folderTree.length === 0" class="flex flex-col items-center justify-center p-32px text-center text-12px text-[--text-muted]">
         <SvgIcon name="folder" class="w-8 h-8 mb-8px opacity-25 text-[--text-muted]"  />
@@ -109,6 +117,8 @@ import TreeNode from './TreeNode.vue'
 import IconButton from '@/components/IconButton.vue'
 import IconLogo from '@/components/icons/IconLogo.vue'
 import { fetchDirectory, getParentFolderURL, resolveAncestorFolderURLs, hasDirectoryReadFailure, getLastDirectoryError, clearDirectoryCache } from '../core/folder'
+import OnboardingCard from './OnboardingCard.vue'
+import { hasSeenFlag, hasSeenFlagSync, setSeenFlag, SEEN_FILE_ACCESS_HINT_KEY } from '../core/onboarding'
 import type { TreeNodeItem } from '@/shared/types'
 
 const STORAGE_ROOT_KEY = 'markcraft_workspace_root'
@@ -143,6 +153,16 @@ const isLoading = ref(false)
 const loadError = ref('')
 // 串行化初始化：快速切换目录/重复挂载时丢弃过期轮次的结果，避免后到的旧响应覆盖新目录
 let loadSeq = 0
+// R2 file-access heuristic: default to dismissed for first paint (no flash of
+// the guide for users who already dismissed it), then reveal when the async
+// storage read proves otherwise.
+const fileAccessHintDismissed = ref(hasSeenFlagSync(SEEN_FILE_ACCESS_HINT_KEY))
+const showNoFileAccess = computed(() => props.isLocal && !fileAccessHintDismissed.value)
+
+function dismissFileAccessHint() {
+  fileAccessHintDismissed.value = true
+  void setSeenFlag(SEEN_FILE_ACCESS_HINT_KEY)
+}
 
 function getSavedRoot(): string {
   try {
@@ -333,6 +353,10 @@ function startResize(e: MouseEvent) {
 onMounted(() => {
   if (props.isLocal) {
     loadFolderTree()
+    // Reveal the guide card only for users who never dismissed it.
+    void hasSeenFlag(SEEN_FILE_ACCESS_HINT_KEY).then((seen) => {
+      fileAccessHintDismissed.value = seen
+    })
   }
 })
 

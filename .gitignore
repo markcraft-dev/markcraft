@@ -26,3 +26,5 @@ src/content/wasm/
 wasm/**/target/
 # Native host build cache
 native-host/**/target/
+# Compiled scratch output for zero-dep unit tests (npm run test:unit)
+tests/.tmp/
