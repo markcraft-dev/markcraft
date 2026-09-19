@@ -11,21 +11,73 @@ const directoryHtmlCache = new Map<string, { expiresAt: number; request: Promise
 // 目录读取失败状态：用于区分「空目录」与「读取失败」（如未开启文件访问权限）
 let directoryReadFailed = false
 let accessGuidanceShown = false
+let lastDirectoryError = ''
 
 /** 本会话内是否发生过本地目录读取失败（供 UI 区分空目录与失败状态）。 */
 export function hasDirectoryReadFailure(): boolean {
   return directoryReadFailed
 }
 
-function handleDirectoryReadFailure(): void {
+/** 最近一次目录读取失败的原因（供 UI 展示/重试与日志）。 */
+export function getLastDirectoryError(): string {
+  return lastDirectoryError
+}
+
+/** 清除目录 HTML 缓存（全部或指定 URL），供侧栏重试按钮使用。 */
+export function clearDirectoryCache(url?: string): void {
+  if (url) {
+    const normalizedUrl = url.endsWith('/') ? url : `${url}/`
+    directoryHtmlCache.delete(normalizedUrl)
+    return
+  }
+  directoryHtmlCache.clear()
+}
+
+function handleDirectoryReadFailure(reason = ''): void {
   directoryReadFailed = true
+  if (reason) lastDirectoryError = reason
   if (accessGuidanceShown) return
   accessGuidanceShown = true
   // 最常见原因是扩展未开启「允许访问文件网址」；给出引导而非静默剪掉子目录
   console.warn(
     '[MarkCraft] 本地目录读取失败：请在 chrome://extensions → MarkCraft 详情页开启「允许访问文件网址」。' +
-      '未开启时子目录会显示为空。'
+      '未开启时子目录会显示为空。' +
+      (reason ? ` 原因：${reason}` : '')
   )
+}
+
+function markDirectoryReadSuccess(): void {
+  directoryReadFailed = false
+  lastDirectoryError = ''
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// file:// 直开冷启动时 background Service Worker 可能尚未唤醒，首条 bg-fetch
+// 会因 "Could not establish connection" 被拒；刷新后 SW 已存活所以恢复。
+// 这里做有限次重试而非单次失败即判空，避免侧栏随机为空。
+const DIRECTORY_FETCH_MAX_ATTEMPTS = 3
+const DIRECTORY_FETCH_RETRY_DELAYS_MS = [250, 800]
+
+function sendBgFetch(url: string): Promise<{ ok?: boolean; res?: string; msg?: string }> {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage({ type: 'bg-fetch', url }, (res) => {
+        // 读取并吞噬 lastError，避免未处理异常；其 message 是重试判据
+        const lastErrorMsg = chrome.runtime.lastError?.message || ''
+        if (lastErrorMsg) {
+          resolve({ ok: false, msg: lastErrorMsg })
+          return
+        }
+        resolve(res || { ok: false, msg: 'empty bg-fetch response' })
+      })
+    } catch (e) {
+      // 扩展上下文失效等同步异常按读取失败处理，不让 Promise 变成 unhandledrejection
+      resolve({ ok: false, msg: e instanceof Error ? e.message : String(e) })
+    }
+  })
 }
 
 function fetchDirectoryHtml(url: string): Promise<string> {
@@ -33,25 +85,26 @@ function fetchDirectoryHtml(url: string): Promise<string> {
   const cached = directoryHtmlCache.get(normalizedUrl)
   if (cached && cached.expiresAt > Date.now()) return cached.request
 
-  const request = new Promise<string>((resolve) => {
-    try {
-      chrome.runtime.sendMessage({ type: 'bg-fetch', url: normalizedUrl }, (res) => {
-        // 读取并吞噬 lastError，避免未处理异常
-        void chrome.runtime.lastError
-        if (res?.ok) {
-          directoryReadFailed = false
-          resolve(res.res || '')
-        } else {
-          handleDirectoryReadFailure()
-          resolve('')
-        }
-      })
-    } catch {
-      // 扩展上下文失效等同步异常按读取失败处理，不让 Promise 变成 unhandledrejection
-      handleDirectoryReadFailure()
-      resolve('')
+  const request = (async (): Promise<string> => {
+    let lastMsg = ''
+    for (let attempt = 1; attempt <= DIRECTORY_FETCH_MAX_ATTEMPTS; attempt += 1) {
+      const res = await sendBgFetch(normalizedUrl)
+      if (res?.ok) {
+        markDirectoryReadSuccess()
+        return res.res || ''
+      }
+      lastMsg = res?.msg || ''
+      if (attempt < DIRECTORY_FETCH_MAX_ATTEMPTS) {
+        console.warn(
+          `[MarkCraft] directory fetch failed (attempt ${attempt}/${DIRECTORY_FETCH_MAX_ATTEMPTS}) for ${normalizedUrl}: ${lastMsg || 'unknown error'} — retrying`
+        )
+        await sleep(DIRECTORY_FETCH_RETRY_DELAYS_MS[attempt - 1] ?? 500)
+      }
     }
-  })
+    handleDirectoryReadFailure(lastMsg)
+    console.error(`[MarkCraft] directory fetch gave up after ${DIRECTORY_FETCH_MAX_ATTEMPTS} attempts: ${normalizedUrl} (${lastMsg || 'unknown error'})`)
+    return ''
+  })()
   directoryHtmlCache.set(normalizedUrl, { expiresAt: Date.now() + DIRECTORY_CACHE_TTL_MS, request })
   request.then((html) => {
     if (!html) directoryHtmlCache.delete(normalizedUrl)

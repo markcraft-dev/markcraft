@@ -40,8 +40,30 @@
         <span class="truncate font-medium">.. 返回上一级</span>
       </div>
 
-      <!-- Empty Folder State -->
-      <div v-if="folderTree.length === 0" class="flex flex-col items-center justify-center p-32px text-center text-12px text-[--text-muted]">
+      <!-- Loading State: skeleton rows while the first directory fetch is in flight.
+        file:// 冷启动时 SW 尚未唤醒会有数百毫秒重试窗口，此前版本直接显示空态造成“随机为空”错觉 -->
+      <div v-if="isLoading" class="flex flex-col gap-6px p-4px" aria-label="正在加载目录" aria-busy="true">
+        <div v-for="i in 6" :key="i" class="h-22px rounded-lg bg-[--bg-hover] opacity-60 animate-pulse" :style="{ width: `${92 - i * 7}%` }"></div>
+        <span class="px-8px py-4px text-11px text-[--text-muted]">正在加载目录…</span>
+      </div>
+
+      <!-- Load Failure State: distinct from a genuinely empty folder.
+        常见原因是未开启「允许访问文件网址」或 SW 冷启动仍失败，提供重试入口 -->
+      <div v-else-if="loadError" class="flex flex-col items-center justify-center p-24px text-center text-12px text-[--text-muted]">
+        <SvgIcon name="folder" class="w-8 h-8 mb-8px opacity-25 text-[--text-muted]"  />
+        <span class="font-medium text-[--text-secondary] mb-4px">目录加载失败</span>
+        <span class="mb-8px leading-relaxed">{{ loadError }}</span>
+        <span class="mb-12px leading-relaxed opacity-80">请确认已在 chrome://extensions → MarkCraft 详情页开启「允许访问文件网址」</span>
+        <button
+          class="px-12px py-6px rounded-lg text-12px font-medium cursor-pointer border border-[--border-color] bg-[--bg-hover] text-[--text-primary] hover:opacity-85 transition-opacity"
+          @click="retryLoad"
+        >
+          重试
+        </button>
+      </div>
+
+      <!-- Empty Folder State (only when load succeeded but no Markdown found) -->
+      <div v-else-if="folderTree.length === 0" class="flex flex-col items-center justify-center p-32px text-center text-12px text-[--text-muted]">
         <SvgIcon name="folder" class="w-8 h-8 mb-8px opacity-25 text-[--text-muted]"  />
         <span>当前目录下未找到 Markdown 文件</span>
       </div>
@@ -86,7 +108,7 @@ import { ref, computed, onMounted } from 'vue'
 import TreeNode from './TreeNode.vue'
 import IconButton from '@/components/IconButton.vue'
 import IconLogo from '@/components/icons/IconLogo.vue'
-import { fetchDirectory, getParentFolderURL, resolveAncestorFolderURLs } from '../core/folder'
+import { fetchDirectory, getParentFolderURL, resolveAncestorFolderURLs, hasDirectoryReadFailure, getLastDirectoryError, clearDirectoryCache } from '../core/folder'
 import type { TreeNodeItem } from '@/shared/types'
 
 const STORAGE_ROOT_KEY = 'markcraft_workspace_root'
@@ -116,6 +138,11 @@ const sideWidth = ref(props.width)
 const folderTree = ref<TreeNodeItem[]>([])
 const currentWorkspaceRoot = ref('')
 const activeHref = ref(window.location.href)
+// 加载态 / 失败态与空目录态三分：避免首屏竞态下把“还没回来”渲染成“没有文件”
+const isLoading = ref(false)
+const loadError = ref('')
+// 串行化初始化：快速切换目录/重复挂载时丢弃过期轮次的结果，避免后到的旧响应覆盖新目录
+let loadSeq = 0
 
 function getSavedRoot(): string {
   try {
@@ -172,6 +199,9 @@ function navigateParentDir() {
 }
 
 async function loadFolderTree(url?: string) {
+  const seq = ++loadSeq
+  isLoading.value = true
+  loadError.value = ''
   let root = url
   if (!root) {
     const saved = getSavedRoot()
@@ -184,15 +214,38 @@ async function loadFolderTree(url?: string) {
   }
   currentWorkspaceRoot.value = root
 
-  const expanded = getSavedExpanded()
+  try {
+    const expanded = getSavedExpanded()
 
-  const ancestors = await resolveAncestorFolderURLs(root, activeHref.value)
-  ancestors.forEach((a) => expanded.add(a))
-  saveExpanded(expanded)
+    const ancestors = await resolveAncestorFolderURLs(root, activeHref.value)
+    if (seq !== loadSeq) return
+    ancestors.forEach((a) => expanded.add(a))
+    saveExpanded(expanded)
 
-  const nodes = await fetchDirectory(root, expanded, activeHref.value)
-  folderTree.value = nodes
-  emit('tree-loaded', nodes)
+    const nodes = await fetchDirectory(root, expanded, activeHref.value)
+    if (seq !== loadSeq) return
+    folderTree.value = nodes
+    if (nodes.length === 0 && hasDirectoryReadFailure()) {
+      loadError.value = getLastDirectoryError() || '无法读取本地目录（可能是扩展尚未就绪或缺少文件访问权限）'
+      console.error(`[MarkCraft] sidebar directory load failed for ${root}: ${loadError.value}`)
+    } else {
+      loadError.value = ''
+    }
+    emit('tree-loaded', nodes)
+  } catch (e) {
+    if (seq !== loadSeq) return
+    const reason = e instanceof Error ? e.message : String(e)
+    loadError.value = reason || '目录加载出现未知错误'
+    console.error(`[MarkCraft] sidebar directory load threw for ${root}:`, e)
+  } finally {
+    if (seq === loadSeq) isLoading.value = false
+  }
+}
+
+function retryLoad() {
+  if (currentWorkspaceRoot.value) clearDirectoryCache(currentWorkspaceRoot.value)
+  else clearDirectoryCache()
+  void loadFolderTree(currentWorkspaceRoot.value || undefined)
 }
 
 async function handleFolderToggle(item: TreeNodeItem) {
@@ -283,6 +336,7 @@ onMounted(() => {
 
 defineExpose({
   loadFolderTree,
+  retryLoad,
   getFolderTree: () => folderTree.value
 })
 </script>
