@@ -44,6 +44,11 @@
         <span v-if="folderName" class="text-[--text-muted] opacity-35 font-mono">/</span>
         <SvgIcon name="file-markdown" class="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
         <span class="text-[--text-primary] font-semibold truncate">{{ docTitle || 'MarkCraft' }}</span>
+        <!-- R9: reading progress % next to the title (rail keeps the bar) -->
+        <span
+          class="text-[--text-muted] font-mono text-11px flex-shrink-0 opacity-80"
+          :title="`已阅读 ${Math.round(readProgress || 0)}%`"
+        >{{ Math.round(readProgress || 0) }}%</span>
         <span
           v-if="isEditMode"
           class="ml-4px px-6px py-1px rounded-full text-10px font-mono flex items-center gap-4px"
