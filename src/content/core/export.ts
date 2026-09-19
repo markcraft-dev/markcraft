@@ -5,7 +5,27 @@ import katexCss from 'katex/dist/katex.min.css?raw'
 import { escapeHtml, sanitizeHtml } from './sanitize'
 
 /**
+ * KaTeX source recovery for rich-text paste: the mathml `<annotation>`
+ * carries the original TeX; rendered text is the honest fallback.
+ */
+function extractKatexSource(el: HTMLElement): string {
+  try {
+    const tex = (el.querySelector('annotation')?.textContent || '').trim()
+    if (tex) return tex
+  } catch {
+    // Selector engine failure: fall through to rendered text.
+  }
+  return (el.textContent || '').trim()
+}
+
+/**
  * Copy rendered Markdown as inline-styled Rich Text for WeChat Official Accounts, Zhihu, Notion, etc.
+ *
+ * R3 fidelity pipeline (paste targets can't render our rich output, so we
+ * degrade honestly instead of pasting broken widgets):
+ *  1. KaTeX → `$source$` / `$$source$$` text (mathml annotation preferred).
+ *  2. Rendered Mermaid SVG → visible placeholder (unrendered source text stays).
+ *  3. Images stay as thumbnails + a tail note (external images 404 in targets).
  */
 export async function copyAsRichText(element: HTMLElement): Promise<boolean> {
   try {
@@ -13,6 +33,55 @@ export async function copyAsRichText(element: HTMLElement): Promise<boolean> {
 
     // Remove buttons, tooltips or editor overlays inside clone
     clone.querySelectorAll('.mdr-code-copy-btn, .mdr-image-wrapper button, .outline-scroll-container').forEach((el) => el.remove())
+
+    // 1. KaTeX → source text (display blocks first; inner .katex nodes are
+    //    skipped via isConnected once their display parent is replaced).
+    clone.querySelectorAll('.katex-display').forEach((display) => {
+      const source = extractKatexSource(display as HTMLElement)
+      const fallback = document.createElement('div')
+      fallback.setAttribute('style', 'font-family: monospace; font-size: 13px; color: #475569; background-color: #f8fafc; padding: 8px 12px; border-radius: 6px; margin: 12px 0;')
+      fallback.textContent = source ? `$$${source}$$` : display.textContent || ''
+      display.replaceWith(fallback)
+    })
+    clone.querySelectorAll('.katex').forEach((node) => {
+      const el = node as HTMLElement
+      if (!el.isConnected) return
+      const source = extractKatexSource(el)
+      const fallback = document.createElement('span')
+      fallback.textContent = source ? `$${source}$` : el.textContent || ''
+      el.replaceWith(fallback)
+    })
+
+    // 2. Rendered Mermaid SVG → placeholder (targets strip SVG entirely).
+    const mermaidPlaceholderStyle = 'border: 1px dashed #94a3b8; border-radius: 8px; padding: 14px; margin: 16px 0; text-align: center; font-size: 13px; color: #64748b; background-color: #f8fafc;'
+    const mermaidPlaceholderText = '【Mermaid 图表：粘贴目标不支持 SVG，请截图后插入原图】'
+    clone.querySelectorAll('.mdr-mermaid-block').forEach((block) => {
+      if (!block.querySelector('svg')) return // unrendered: source text pastes as-is
+      const holder = document.createElement('div')
+      holder.setAttribute('style', mermaidPlaceholderStyle)
+      holder.textContent = mermaidPlaceholderText
+      block.replaceWith(holder)
+    })
+    // Bare rendered SVGs outside the block wrapper (defensive).
+    clone.querySelectorAll('.mermaid[data-processed="true"] > svg, svg.mermaid').forEach((svg) => {
+      const holder = document.createElement('div')
+      holder.setAttribute('style', mermaidPlaceholderStyle)
+      holder.textContent = mermaidPlaceholderText
+      svg.replaceWith(holder)
+    })
+
+    // 3. Images stay as thumbnails + an honest tail note (微信/知乎外链图必挂).
+    const pastedImages = clone.querySelectorAll('img')
+    pastedImages.forEach((img, idx) => {
+      img.setAttribute('style', 'max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #e2e8f0;')
+      if (!img.getAttribute('alt')) img.setAttribute('alt', `图片${idx + 1}`)
+    })
+    if (pastedImages.length > 0) {
+      const note = document.createElement('p')
+      note.setAttribute('style', 'font-size: 12px; color: #94a3b8; margin: 12px 0 0 0;')
+      note.textContent = `注：以上 ${pastedImages.length} 张图片需在目标编辑器中另行上传（微信/知乎外链图片无法直接显示）。`
+      clone.appendChild(note)
+    }
 
     // Convert code blocks with inline styling for universal compatibility
     clone.querySelectorAll('pre').forEach((pre) => {
