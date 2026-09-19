@@ -198,7 +198,7 @@ import { renderMarkdown, renderMermaidDiagrams, rerenderMermaidDiagrams } from '
 import { extractOutline } from './core/outline'
 import { applyTheme, applyCustomStyles } from './core/theme'
 import { enhanceContentBlocks, renderTocContainer } from './core/enhancements'
-import { copyAsRichText, exportAsStandaloneHtml } from './core/export'
+import { copyAsRichText, exportAsStandaloneHtml, exportElementAsStandaloneHtml } from './core/export'
 import { domToMarkdown } from './core/dom-to-markdown'
 import {
   flushScrollPosition,
@@ -769,8 +769,15 @@ async function handlePaletteAction(actionId: string) {
     }
   } else if (actionId === 'export-html') {
     const docTitle = document.title || 'MarkCraft-Export'
-    exportAsStandaloneHtml(docTitle, renderedHtml.value)
-    showToast('✓ 已成功导出单文件 HTML')
+    // Live-element export: rendered Mermaid SVGs + inlined images + sanitize.
+    // Falls back to the string entry when the article node is unavailable.
+    if (contentRef.value) {
+      const ok = await exportElementAsStandaloneHtml(docTitle, contentRef.value)
+      showToast(ok ? '✓ 已成功导出单文件 HTML' : '✕ 导出失败，请稍后重试')
+    } else {
+      exportAsStandaloneHtml(docTitle, renderedHtml.value)
+      showToast('✓ 已成功导出单文件 HTML')
+    }
   } else if (actionId === 'export-md') {
     const docTitle = document.title || 'document'
     const md = contentRef.value && isEditMode.value ? await domToMarkdown(contentRef.value) : rawMarkdownContent.value

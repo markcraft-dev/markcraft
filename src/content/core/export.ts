@@ -1,6 +1,8 @@
 /**
  * MarkCraft Document Export & Rich-Text Clipboard Utility
  */
+import katexCss from 'katex/dist/katex.min.css?raw'
+import { escapeHtml, sanitizeHtml } from './sanitize'
 
 /**
  * Copy rendered Markdown as inline-styled Rich Text for WeChat Official Accounts, Zhihu, Notion, etc.
@@ -64,21 +66,99 @@ export async function copyAsRichText(element: HTMLElement): Promise<boolean> {
   }
 }
 
-/** 标题等插值进导出模板前做 HTML 转义，防止 `</title><script>…` 类注入。 */
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (ch) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] || ch
-  ))
+// Interactive chrome that must not leak into the exported file.
+const EXPORT_CHROME_SELECTORS = [
+  '.mdr-code-copy-btn',
+  '.mdr-image-wrapper button',
+  '.mdr-heading-anchor',
+  '.mdr-mermaid-controls',
+  '.outline-scroll-container'
+].join(',')
+
+// Oversized images stay remote (mirrors the t5 bg-fetch size cap philosophy):
+// a single huge Base64 blob would bloat the single file and risk OOM on save.
+const MAX_INLINE_IMAGE_BYTES = 16 * 1024 * 1024
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
+    reader.onerror = () => reject(reader.error || new Error('FileReader failed'))
+    reader.readAsDataURL(blob)
+  })
 }
 
 /**
- * Export rendered document as a standalone single-file HTML with embedded styles
+ * Inline `<img>` sources as data: URLs so the export opens fully offline.
+ * Any failure (CORS, file:// restrictions, oversize, network) degrades to
+ * keeping the original URL + console warn — export is never blocked (R1-2).
  */
-export function exportAsStandaloneHtml(title: string, renderedHtml: string): void {
+export async function inlineImagesInto(root: HTMLElement, baseHref: string): Promise<void> {
+  const imgs = Array.from(root.querySelectorAll('img'))
+  await Promise.all(
+    imgs.map(async (img) => {
+      const src = img.getAttribute('src') || ''
+      if (!src || src.startsWith('data:') || src.startsWith('blob:')) return
+      let absolute = ''
+      try {
+        absolute = new URL(src, baseHref).href
+      } catch {
+        console.warn(`[MarkCraft] export: unresolvable image src, keeping URL: ${src}`)
+        return
+      }
+      if (absolute.startsWith('data:') || absolute.startsWith('blob:')) return
+      try {
+        const res = await fetch(absolute)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const blob = await res.blob()
+        if (!blob.size) throw new Error('empty body')
+        if (blob.size > MAX_INLINE_IMAGE_BYTES) {
+          console.warn(
+            `[MarkCraft] export: image over ${(MAX_INLINE_IMAGE_BYTES / 1024 / 1024).toFixed(0)}MB stays remote: ${absolute}`
+          )
+          return
+        }
+        const dataUrl = await blobToDataUrl(blob)
+        if (!dataUrl) throw new Error('dataURL encode failed')
+        img.setAttribute('src', dataUrl)
+        img.removeAttribute('srcset')
+      } catch (err) {
+        console.warn(`[MarkCraft] export: image inline failed, keeping URL: ${absolute}`, err)
+      }
+    })
+  )
+}
+
+// Print stylesheet for the exported file AND the on-screen reader (R1-3):
+// A4-friendly margins, no clipped code blocks/tables, no orphaned headings.
+const EXPORT_PRINT_CSS = `
+@media print {
+  body { background: #fff !important; padding: 0 !important; display: block !important; }
+  .container { box-shadow: none !important; border: none !important; border-radius: 0 !important; max-width: none !important; padding: 0 4mm !important; }
+  pre, table, blockquote, figure { break-inside: avoid; page-break-inside: avoid; }
+  pre { white-space: pre-wrap !important; overflow: visible !important; }
+  img, svg { max-width: 100% !important; }
+  h1, h2, h3 { break-after: avoid; page-break-after: avoid; }
+  @page { margin: 12mm; }
+}`
+
+/**
+ * Assemble the standalone document. The body ALWAYS passes through the R0
+ * sanitize chain; KaTeX CSS is inlined from the installed package (never
+ * hand-copied) so formulas render offline. KaTeX *fonts* stay remote by
+ * design (size) and fall back to system serif when offline.
+ */
+export function buildStandaloneHtmlDocument(title: string, bodyHtml: string): string {
   const safeTitle = escapeHtml(title) || 'MarkCraft Document'
-  const docLang = document.documentElement.lang || navigator.language || 'zh-CN'
-  const fullHtml = `<!DOCTYPE html>
-<html lang="${docLang}">
+  let docLang = 'zh-CN'
+  try {
+    docLang = document.documentElement.lang || navigator.language || 'zh-CN'
+  } catch {
+    // Non-DOM runtimes (unit checks): keep the default.
+  }
+  const safeBody = sanitizeHtml(bodyHtml)
+  return `<!DOCTYPE html>
+<html lang="${escapeHtml(docLang)}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -119,16 +199,21 @@ export function exportAsStandaloneHtml(title: string, renderedHtml: string): voi
     blockquote { margin: 20px 0; padding: 10px 20px; border-left: 4px solid #2563eb; background: #f8fafc; border-radius: 0 8px 8px 0; color: #4b5563; }
     img { max-width: 100%; height: auto; border-radius: 8px; }
   </style>
+  <style>
+${katexCss}
+  </style>${EXPORT_PRINT_CSS}
 </head>
 <body>
   <div class="container">
     <article class="mdr-content">
-      ${renderedHtml}
+      ${safeBody}
     </article>
   </div>
 </body>
 </html>`
+}
 
+function downloadHtmlDocument(title: string, fullHtml: string): void {
   const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -138,4 +223,45 @@ export function exportAsStandaloneHtml(title: string, renderedHtml: string): voi
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+/**
+ * Export rendered document as a standalone single-file HTML with embedded styles.
+ * String-based entry (kept for compat): sanitized + KaTeX/print CSS, no image
+ * inlining (no DOM to resolve against) — prefer `exportElementAsStandaloneHtml`.
+ */
+export function exportAsStandaloneHtml(title: string, renderedHtml: string): void {
+  downloadHtmlDocument(title, buildStandaloneHtmlDocument(title, renderedHtml))
+}
+
+/**
+ * Export the LIVE article element: rendered Mermaid SVGs are serialized inline
+ * (the `renderedHtml` string only holds the pre-render code fence), images are
+ * inlined with graceful fallback, interactive chrome is stripped, and the
+ * result passes through the R0 sanitize chain. Returns false on failure.
+ */
+export async function exportElementAsStandaloneHtml(
+  title: string,
+  element: HTMLElement,
+  baseHref?: string
+): Promise<boolean> {
+  try {
+    const clone = element.cloneNode(true) as HTMLElement
+    clone.querySelectorAll(EXPORT_CHROME_SELECTORS).forEach((el) => el.remove())
+    clone.removeAttribute('contenteditable')
+    let base = baseHref || ''
+    if (!base) {
+      try {
+        base = document.baseURI || window.location.href
+      } catch {
+        base = window.location.href
+      }
+    }
+    await inlineImagesInto(clone, base)
+    downloadHtmlDocument(title, buildStandaloneHtmlDocument(title, clone.innerHTML))
+    return true
+  } catch (err) {
+    console.warn('[MarkCraft] export failed:', err)
+    return false
+  }
 }

@@ -14,6 +14,7 @@
 - **验收**
   1. `reference/fixtures/xss.md`（抄 Reader 的 `test.md` §6：`<script>alert`、onerror、`javascript:` 链接、`@import` style）渲染后：无弹窗、无网络外联请求（devtools `[manual]`）、恶意节点被剥离（DOM 断言）。
   2. 导出 HTML（R1）同样过消毒；KaTeX/Mermaid 正常渲染不受影响（现有文档回归）。
+   ✅ T9 已做 export 链份额：`sanitize.ts` 新建并接入导出入口（`buildStandaloneHtmlDocument` 必经 `sanitizeHtml`）；渲染链与 R7 接入不在本任务（T15 验收时覆盖）。
 - **现状差距**：`markdown.ts` 无消毒步骤；`export.ts:exportAsStandaloneHtml` 直接拼 `renderedHtml`。
 - **技术方案**
   1. 新增 `src/content/core/sanitize.ts`：`sanitizeHtml(html): string`（自研轻量 allowlist：禁 `script/iframe/object/embed`、禁 `on*` 属性、禁 `javascript:`/`data:text/html` URL、剥 `<style>` 内 `@import`；Mermaid 输出的 `<svg>` 保留但剥事件属性）。
@@ -29,16 +30,17 @@
 - **非目标**：DOCX（重，明确不做）、PDF 引擎（用打印 CSS 走系统打印，不自研）。
 - **用户故事**：技术作者导出后发同事，对方断网打开，Mermaid/公式/表格/代码与屏上一致；打印/PDF 无黑边裁切。
 - **验收**
-  1. 三 fixture（`export-mermaid.md` / `export-katex.md` / `export-table-code.md`）：断网打开导出文件，像素级一致（`[manual]` 目检 + DOM 结构断言：`img[src^=data:]` 全覆盖、`.katex` 样式生效）。
-  2. 图片内联失败（跨域/CORS）时降级保留原 URL + console warn，不阻断导出（单测/断言）。
-  3. `@media print`：隐藏 TopHeader/侧栏/BackToTop（`.print:hidden` 扩展），`pre` 不分页截断（`break-inside: avoid`），A4 三 fixture `[manual]`。
-  4. 标题注入回归：`</title><script>` 标题仍被转义（现有 `escapeHtml` 单测化）。
+  - [x] 1. 三 fixture（`export-mermaid.md` / `export-katex.md` / `export-table-code.md`，`reference/fixtures/` ✅ T9 已建）：断网打开导出文件，像素级一致（`[manual]` 目检 + DOM 结构断言：`img[src^=data:]` 全覆盖、`.katex` 样式生效）。实现：live-element 导出（Mermaid SVG 序列化保留）+ KaTeX CSS `?raw` 内联；`[manual]` 目检待 T15。
+  - [x] 2. 图片内联失败（跨域/CORS）时降级保留原 URL + console warn，不阻断导出（✅ T9：`inlineImagesInto` 全路径 try/catch + 16MB 超限降级；纯函数断言见 `npm run test:unit`，fetch 降级分支走代码走查 + T15 `[manual]`）。
+  - [x] 3. `@media print`（✅ T9：导出模板内嵌打印 CSS + `markdown.css` 屏上打印规则 `pre/table` 不截断、chrome 隐藏；A4 三 fixture `[manual]` 待 T15）。
+  - [x] 4. 标题注入回归：`</title><script>` 标题仍被转义（✅ T9：`escapeHtml` 迁入 `sanitize.ts` 并单测化，见上）。
 - **现状差距**：见上；另图片 `max-width:100%` 有、无圆角（`export.ts:120`）与屏上 lightbox 语义不一致，可接受。
 - **技术方案**
   1. `export.ts` 新增 `inlineImages(clone, baseHref)`：遍历 `img`，`fetch → blob → dataURL`（经 bg-fetch 复用 CORS 路径？content 侧直 fetch 失败则 warn 降级；注意 `file://` 相对图用 `fetchDocContent` 思路解析，失败降级）。
   2. 内联 KaTeX CSS：将 `katex/dist/katex.min.css` 读入构建（`?inline` 或 scripts/build.mjs 复制，**不手写 CSS**），Mermaid SVG 已是行内 DOM 直接保留。
   3. 打印 CSS 追加到导出模板 + `content/style.css`（屏上打印同样隐藏 chrome）。
   4. 文件变更：仅 `export.ts`（+ 构建脚本若需内联 css）+ `reference/fixtures/export-*` + 本验收表打勾。
+      ✅ T9 实际变更：`export.ts`（独占）、新建 `sanitize.ts`（R0 export 链份）、`App.vue` 仅导出入口一行调用切换、`shims.d.ts` 加 `*?raw` 声明（KaTeX CSS 用 `?raw` 内联，构建脚本零改动）、`markdown.css` 追加屏上打印规则（`src styles/style.css` 经查无人引入，未动）、`tests/export-sanitize.test.mjs` 零依赖单测（已接入 `npm run test:unit`）、`package.json` test:unit 编译目标扩展、`reference/fixtures/export-*` 三件套。
 - **风险**：大图 Base64 体积（16MB 上限呼应 t5 bg-fetch cap，超限降级）；`file://` 读图 CORS（降级路径必须可用）。
 - **测试**：三 fixture + 降级用例 + 现有构建/类型门禁。
 - **估算**：M。**Phase-2 首批**。

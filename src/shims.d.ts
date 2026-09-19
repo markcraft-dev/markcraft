@@ -17,3 +17,10 @@ declare module 'markdown-it-deflist'
 declare module 'markdown-it-abbr'
 declare module 'markdown-it-footnote'
 declare module '@mdit/plugin-alert'
+
+// Vite `?raw` imports resolve to the file content as a string at bundle time
+// (used for inlining katex.min.css into the standalone export template).
+declare module '*?raw' {
+  const content: string
+  export default content
+}

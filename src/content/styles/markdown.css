@@ -816,3 +816,34 @@ kbd.mdr-kbd {
 :root[data-mdr-theme="dracula"] .mdr-content .hljs-meta {
   color: #b392f0;
 }
+
+/* R1-3 on-screen print rules (feeds dist/content/style.css via the content
+   bundle): hide reader chrome, never split code blocks/tables across pages. */
+@media print {
+  body.mdr .mdr-top-header,
+  body.mdr .mdr-side,
+  body.mdr .mdr-right-side,
+  body.mdr .back-to-top-btn {
+    display: none !important;
+  }
+  body.mdr .mdr-main {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  body.mdr .mdr-content pre,
+  body.mdr .mdr-content table,
+  body.mdr .mdr-content blockquote {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  body.mdr .mdr-content pre {
+    white-space: pre-wrap;
+    overflow: visible;
+  }
+  body.mdr .mdr-content h1,
+  body.mdr .mdr-content h2,
+  body.mdr .mdr-content h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+}
