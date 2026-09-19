@@ -195,6 +195,7 @@ import {
   NATIVE_HOST_README_URL
 } from './core/onboarding'
 import { renderMarkdown, renderMermaidDiagrams, rerenderMermaidDiagrams } from './core/markdown'
+import { sanitizeHtml } from './core/sanitize'
 import { extractOutline } from './core/outline'
 import { applyTheme, applyCustomStyles } from './core/theme'
 import { enhanceContentBlocks, renderTocContainer } from './core/enhancements'
@@ -343,7 +344,11 @@ let renderSeq = 0
 async function updateMarkdown(rawText: string) {
   const seq = ++renderSeq
   rawMarkdownContent.value = rawText
-  renderedHtml.value = renderMarkdown(rawText, settings.value.mdPlugins)
+  // R0/G1: every render passes through the sanitize chain before reaching
+  // v-html — untrusted markdown (<script>, on*, javascript:, @import) is
+  // neutralized while Mermaid/KaTeX structure, task-list inputs and heading
+  // ids are preserved (see reference/fixtures/xss.md EXPECTED).
+  renderedHtml.value = sanitizeHtml(renderMarkdown(rawText, settings.value.mdPlugins))
   await nextTick()
   if (seq !== renderSeq) return
 

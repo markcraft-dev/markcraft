@@ -12,9 +12,10 @@
 - **非目标**：CSP 改动（MV3 content-script 上下文复杂，另议）。
 - **用户故事**：作为读者，打开不可信 md（含 `<script>`/`<img onerror>`/`@import`）时，页面不执行、不外联。
 - **验收**
-  1. `reference/fixtures/xss.md`（抄 Reader 的 `test.md` §6：`<script>alert`、onerror、`javascript:` 链接、`@import` style）渲染后：无弹窗、无网络外联请求（devtools `[manual]`）、恶意节点被剥离（DOM 断言）。
+  - [x] 1. `reference/fixtures/xss.md`（抄 Reader 的 `test.md` §6：`<script>alert`、onerror、`javascript:` 链接、`@import` style）渲染后：无弹窗、无网络外联请求（devtools `[manual]`，待 T15）、恶意节点被剥离（✅ T18：`updateMarkdown` 赋值前必经 `sanitizeHtml`；`tests/render-sanitize.test.mjs` 逐向量断言 fixture EXPECTED + SAFE CONTROLS 不误杀；DOM 属性级断言走 `acceptance-manual.md` §R0）。
   2. 导出 HTML（R1）同样过消毒；KaTeX/Mermaid 正常渲染不受影响（现有文档回归）。
    ✅ T9 已做 export 链份额：`sanitize.ts` 新建并接入导出入口（`buildStandaloneHtmlDocument` 必经 `sanitizeHtml`）；渲染链与 R7 接入不在本任务（T15 验收时覆盖）。
+   ✅ T18 已做 render 链份额（关闭 T15 缺口 G1）：`App.vue/updateMarkdown` 渲染赋值处接入；搜索摘要确认无需重改（`renderSnippetHtml` 已是 escape-then-mark，仅自产 `<mark>` 标签）；R7 接入随 R7 任务。
 - **现状差距**：`markdown.ts` 无消毒步骤；`export.ts:exportAsStandaloneHtml` 直接拼 `renderedHtml`。
 - **技术方案**
   1. 新增 `src/content/core/sanitize.ts`：`sanitizeHtml(html): string`（自研轻量 allowlist：禁 `script/iframe/object/embed`、禁 `on*` 属性、禁 `javascript:`/`data:text/html` URL、剥 `<style>` 内 `@import`；Mermaid 输出的 `<svg>` 保留但剥事件属性）。

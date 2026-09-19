@@ -14,7 +14,7 @@
     "dev": "node scripts/build.mjs --watch",
     "build:wasm": "node scripts/build_wasm.mjs",
     "build": "npm run build:wasm && node scripts/build.mjs",
-    "test:unit": "pnpm exec tsc src/content/core/doc-url.ts src/content/core/sanitize.ts src/content/core/slug.ts src/content/core/recents.ts --target es2022 --module es2022 --outDir tests/.tmp --skipLibCheck && node --test tests/doc-url.test.mjs tests/export-sanitize.test.mjs tests/slug.test.mjs tests/recents.test.mjs"
+    "test:unit": "pnpm exec tsc src/content/core/doc-url.ts src/content/core/sanitize.ts src/content/core/slug.ts src/content/core/recents.ts --target es2022 --module es2022 --outDir tests/.tmp --skipLibCheck && node --test tests/doc-url.test.mjs tests/export-sanitize.test.mjs tests/slug.test.mjs tests/recents.test.mjs tests/render-sanitize.test.mjs"
   },
   "dependencies": {
     "@mdit/plugin-alert": "^1.0.3",
