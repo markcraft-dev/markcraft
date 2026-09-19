@@ -275,6 +275,11 @@ function updateActiveNodeRecursively(nodes: TreeNodeItem[], targetHref: string) 
   })
 }
 
+function setActiveHref(href: string) {
+  activeHref.value = href
+  updateActiveNodeRecursively(folderTree.value, href)
+}
+
 async function handleFileSelect(item: TreeNodeItem) {
   if (activeHref.value === item.href) {
     return
@@ -289,12 +294,9 @@ async function handleFileSelect(item: TreeNodeItem) {
     })
 
     if (res && res.ok && res.res !== undefined) {
+      // URL + history sync lives in App.handleContentChange so every
+      // switch path (sidebar, palette, popstate) stays consistent.
       emit('changeRaw', res.res, item.href)
-      try {
-        history.pushState({ href: item.href }, '', item.href)
-      } catch {
-        document.title = item.content
-      }
       return
     }
   } catch (e) {
@@ -337,6 +339,7 @@ onMounted(() => {
 defineExpose({
   loadFolderTree,
   retryLoad,
+  setActiveHref,
   getFolderTree: () => folderTree.value
 })
 </script>

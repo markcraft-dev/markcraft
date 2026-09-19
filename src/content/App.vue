@@ -139,6 +139,12 @@ import {
   restoreScrollPosition,
   scheduleSaveScrollPosition
 } from './core/scroll-memory'
+import {
+  fetchDocContent,
+  isSameDocument,
+  parseDocUrl,
+  syncDocUrl
+} from './core/doc-url'
 import { storeFileHandle, storeDirectoryHandle, trySilentSave, trySilentSaveViaDirectory, writeToFileHandle } from './core/file-handle-storage'
 import { tryNativeSave } from './core/native-save'
 import { useStorage, normalizeSettings } from '@/shared/storage'
@@ -266,7 +272,7 @@ async function updateMarkdown(rawText: string) {
   await renderMermaidDiagrams()
 }
 
-async function handleContentChange(newContent: string, newHref?: string) {
+async function handleContentChange(newContent: string, newHref?: string, urlOpts?: { replace?: boolean }) {
   const oldHref = currentActiveHref.value
   const nextHref = newHref || oldHref
   const isSwitch = nextHref !== oldHref
@@ -292,6 +298,10 @@ async function handleContentChange(newContent: string, newHref?: string) {
   // A newer switch took over while rendering: it owns the viewport now.
   if (mySwitch !== scrollSwitchSeq) return
   if (isSwitch) {
+    // URL sync AFTER the new document is determined + rendered, BEFORE
+    // scroll restore (doc-first ordering): refresh / paste / share then
+    // reopen exactly this document, and scroll-memory restores its offset.
+    syncDocUrl(nextHref, urlOpts)
     await restoreDocScroll(nextHref, mySwitch)
   } else if (currentActiveHref.value === nextHref) {
     window.scrollTo(0, liveY)
@@ -485,34 +495,73 @@ function toggleTheme() {
   void saveSettings({ pageTheme: next })
 }
 
+// URL-synced document switch (Bug3 fix): every in-place document change goes
+// through here so the address bar, history, sidebar highlight and scroll
+// restore stay consistent. `content` skips the fetch when the caller already
+// has it (sidebar in-memory path); `anchor` jumps to a heading afterwards
+// (shared section links win over the remembered offset).
+let pendingSwitchHref: string | null = null
+async function switchToDocument(
+  href: string,
+  content?: string,
+  opts?: { replace?: boolean; anchor?: string | null }
+): Promise<void> {
+  if (!href) return
+  if (isSameDocument(href, currentActiveHref.value) && content === undefined) return
+  if (pendingSwitchHref === href) return
+  pendingSwitchHref = href
+  try {
+    let raw = content
+    if (raw === undefined) {
+      raw = await fetchDocContent(href)
+      if (raw === null) {
+        // bg-fetch failed (e.g. no file access): full navigation lets the
+        // browser show the real document / error instead of a blank reader.
+        window.location.href = href
+        return
+      }
+    }
+    await handleContentChange(raw, href, { replace: opts?.replace })
+    sideRef.value?.setActiveHref(href)
+    if (opts?.anchor) scrollToAnchor(opts.anchor)
+  } finally {
+    if (pendingSwitchHref === href) pendingSwitchHref = null
+  }
+}
+
+function scrollToAnchor(anchor: string) {
+  try {
+    const id = decodeURIComponent(anchor.replace(/^#+/, ''))
+    if (!id) return
+    // CSS.escape may be unavailable in older contexts; fall back to raw id.
+    let el: HTMLElement | null = null
+    try {
+      el = document.getElementById(id)
+    } catch {
+      return
+    }
+    if (el) {
+      const headerOffset = 54
+      const elementPosition = el.getBoundingClientRect().top
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset
+      window.scrollTo({
+        top: Math.max(0, offsetPosition),
+        behavior: 'auto'
+      })
+    }
+  } catch {
+    // A bad anchor must never break the document switch.
+  }
+}
+
 function handlePaletteSelectFile(item: PaletteItem) {
   if (item.href) {
-    chrome.runtime.sendMessage({ type: 'bg-fetch', url: item.href }, (res) => {
-      if (res && res.ok && res.res !== undefined) {
-        void handleContentChange(res.res, item.href)
-        try {
-          history.pushState({ href: item.href }, '', item.href)
-        } catch {
-          document.title = item.title
-        }
-      } else {
-        window.location.href = item.href
-      }
-    })
+    void switchToDocument(item.href)
   }
 }
 
 function handlePaletteSelectHeading(headingId: string) {
-  const el = document.getElementById(headingId)
-  if (el) {
-    const headerOffset = 54
-    const elementPosition = el.getBoundingClientRect().top
-    const offsetPosition = elementPosition + window.pageYOffset - headerOffset
-    window.scrollTo({
-      top: Math.max(0, offsetPosition),
-      behavior: 'auto'
-    })
-  }
+  scrollToAnchor(headingId)
 }
 
 async function handlePaletteAction(actionId: string) {
@@ -555,27 +604,31 @@ async function handlePaletteAction(actionId: string) {
 }
 
 // Back/forward through in-place switches (history.pushState): treat it as a
-// document switch with the same save-old / restore-new ordering.
+// document switch with the same save-old / restore-new ordering. The state
+// carries the exact doc href; when it is missing (initial entry, hash-route
+// traversal) the pointer is re-parsed from the location instead.
 function handlePopState(e: PopStateEvent) {
-  const stateHref = e.state && typeof (e.state as { href?: unknown }).href === 'string'
-    ? (e.state as { href: string }).href
-    : window.location.href
-  if (!stateHref || stateHref === currentActiveHref.value) return
-  try {
-    chrome.runtime.sendMessage({ type: 'bg-fetch', url: stateHref }, (res) => {
-      if (res && res.ok && res.res !== undefined) {
-        void handleContentChange(res.res, stateHref)
-      } else {
-        flushScrollPosition(currentActiveHref.value)
-        currentActiveHref.value = stateHref
-        window.scrollTo(0, 0)
-        updateReadingProgress()
-      }
-    })
-  } catch {
-    // Extension context invalidated: fall back to a full navigation.
-    window.location.href = stateHref
-  }
+  const state = (e.state || {}) as { mdrHref?: unknown; href?: unknown }
+  // `mdrHref` is the current shape; legacy `href` entries predate the fix.
+  const stateHref = typeof state.mdrHref === 'string' && state.mdrHref
+    ? state.mdrHref
+    : typeof state.href === 'string' && state.href
+      ? state.href
+      : null
+  const parsed = parseDocUrl(window.location.href)
+  const target = stateHref || parsed.docHref || window.location.href.split('#')[0]
+  if (!target || isSameDocument(target, currentActiveHref.value) || pendingSwitchHref === target) return
+  void switchToDocument(target, undefined, { anchor: parsed.anchor })
+}
+
+// Back/forward through hash-route entries fires popstate too; the guards make
+// the second event a no-op. Manual hash edits to #mdr-doc=… also land here.
+// Plain heading anchors are ignored so in-page jumps keep working.
+function handleHashChange() {
+  const parsed = parseDocUrl(window.location.href)
+  if (!parsed.docHref) return
+  if (isSameDocument(parsed.docHref, currentActiveHref.value) || pendingSwitchHref === parsed.docHref) return
+  void switchToDocument(parsed.docHref, undefined, { anchor: parsed.anchor })
 }
 
 function flushCurrentScroll() {
@@ -669,6 +722,7 @@ onMounted(async () => {
   window.addEventListener('keydown', handleGlobalKeydown)
   window.addEventListener('scroll', handleWindowScroll, { passive: true })
   window.addEventListener('popstate', handlePopState)
+  window.addEventListener('hashchange', handleHashChange)
   window.addEventListener('pagehide', flushCurrentScroll)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   updateReadingProgress()
@@ -683,9 +737,20 @@ onMounted(async () => {
   )
 
   await updateMarkdown(props.initialContent)
-  // First paint: resume this document's remembered place (reload case),
-  // otherwise start at the top.
-  await restoreDocScroll(currentActiveHref.value, scrollSwitchSeq)
+  // Initial doc resolution (Bug3): a pasted / shared URL may point at a
+  // different document than the loaded file — via a full URL (navigation
+  // already handled it) or via a ?mdr-doc= / #mdr-doc= pointer (resolve it
+  // now, replacing the entry so refresh stays consistent). Doc-first: the
+  // switch renders + syncs the URL + restores that document's scroll, so the
+  // plain reload path below only runs when no pointer exists.
+  const initial = parseDocUrl(window.location.href)
+  if (initial.docHref && !isSameDocument(initial.docHref, currentActiveHref.value)) {
+    await switchToDocument(initial.docHref, undefined, { replace: true, anchor: initial.anchor })
+  } else {
+    // First paint: resume this document's remembered place (reload case),
+    // otherwise start at the top.
+    await restoreDocScroll(currentActiveHref.value, scrollSwitchSeq)
+  }
 
   if (window.innerWidth < 1100) {
     rightSideOpen.value = false
@@ -708,6 +773,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
   window.removeEventListener('scroll', handleWindowScroll)
   window.removeEventListener('popstate', handlePopState)
+  window.removeEventListener('hashchange', handleHashChange)
   window.removeEventListener('pagehide', flushCurrentScroll)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
