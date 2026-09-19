@@ -132,6 +132,13 @@ import { applyTheme, applyCustomStyles } from './core/theme'
 import { enhanceContentBlocks, renderTocContainer } from './core/enhancements'
 import { copyAsRichText, exportAsStandaloneHtml } from './core/export'
 import { domToMarkdown } from './core/dom-to-markdown'
+import {
+  flushScrollPosition,
+  loadScrollPosition,
+  readCurrentScrollY,
+  restoreScrollPosition,
+  scheduleSaveScrollPosition
+} from './core/scroll-memory'
 import { storeFileHandle, storeDirectoryHandle, trySilentSave, trySilentSaveViaDirectory, writeToFileHandle } from './core/file-handle-storage'
 import { tryNativeSave } from './core/native-save'
 import { useStorage, normalizeSettings } from '@/shared/storage'
@@ -185,6 +192,41 @@ function updateReadingProgress() {
   const docHeight = document.documentElement.scrollHeight - window.innerHeight
   readingProgress.value = docHeight > 0 ? Math.min(100, Math.max(0, (scrollTop / docHeight) * 100)) : 0
 }
+
+// Window scroll handler: refresh the header progress and debounce-persist the
+// offset under the active document so each file keeps its own place.
+function handleWindowScroll() {
+  updateReadingProgress()
+  scheduleSaveScrollPosition(currentActiveHref.value)
+}
+
+// Scroll-switch epoch: bumped on every document switch so a superseded
+// switch neither persists nor restores scroll after a newer one took over.
+// `restorePendingHref` marks a document whose restore hasn't settled —
+// switching away from it must NOT flush the live viewport (which still shows
+// the previous document's offset) over its stored place.
+let scrollSwitchSeq = 0
+let restorePendingHref: string | null = null
+
+// Restore the remembered offset for `href` with async-height retries.
+// Unread documents (no saved offset) start at the top — this is the Bug1 fix:
+// without it an in-place doc switch keeps the previous document's offset.
+// `token` cancels stale restores when a newer switch supersedes this one.
+async function restoreDocScroll(href: string, token: number) {
+  restorePendingHref = href
+  try {
+    const saved = await loadScrollPosition(href)
+    if (token !== scrollSwitchSeq) return
+    if (saved !== null && saved > 0) {
+      await restoreScrollPosition(saved, () => token !== scrollSwitchSeq)
+    } else if (token === scrollSwitchSeq) {
+      window.scrollTo(0, 0)
+    }
+    if (token === scrollSwitchSeq) updateReadingProgress()
+  } finally {
+    if (restorePendingHref === href) restorePendingHref = null
+  }
+}
 const contentRef = ref<HTMLElement | null>(null)
 const sideRef = ref<InstanceType<typeof Side> | null>(null)
 const outlineData = ref<{ tree: OutlineItem[]; list: OutlineItem[] }>({ tree: [], list: [] })
@@ -224,11 +266,37 @@ async function updateMarkdown(rawText: string) {
   await renderMermaidDiagrams()
 }
 
-function handleContentChange(newContent: string, newHref?: string) {
-  if (newHref) {
-    currentActiveHref.value = newHref
+async function handleContentChange(newContent: string, newHref?: string) {
+  const oldHref = currentActiveHref.value
+  const nextHref = newHref || oldHref
+  const isSwitch = nextHref !== oldHref
+  const mySwitch = isSwitch ? ++scrollSwitchSeq : scrollSwitchSeq
+  // Same-document re-render (e.g. settings change): keep the live offset —
+  // replacing v-html resets the DOM and may jump otherwise.
+  const liveY = readCurrentScrollY()
+  if (isSwitch) {
+    if (restorePendingHref !== oldHref) {
+      // Save-then-restore ordering: persist A's offset BEFORE it is replaced,
+      // otherwise A's place is lost and B inherits A's viewport (Bug1).
+      flushScrollPosition(oldHref)
+    }
+    // Else: the old document never settled (fast double-switch) — its live
+    // viewport still shows an even older document, so leave its stored
+    // offset untouched instead of poisoning it.
+    currentActiveHref.value = nextHref
+    // Drop the stale progress immediately so the header doesn't show A's
+    // 100% while B is still rendering.
+    readingProgress.value = 0
   }
-  updateMarkdown(newContent)
+  await updateMarkdown(newContent)
+  // A newer switch took over while rendering: it owns the viewport now.
+  if (mySwitch !== scrollSwitchSeq) return
+  if (isSwitch) {
+    await restoreDocScroll(nextHref, mySwitch)
+  } else if (currentActiveHref.value === nextHref) {
+    window.scrollTo(0, liveY)
+    updateReadingProgress()
+  }
 }
 
 function showToast(msg: string) {
@@ -374,7 +442,11 @@ async function finishInPlaceEdit() {
   if (contentRef.value) {
     const newMarkdown = await domToMarkdown(contentRef.value)
     rawMarkdownContent.value = newMarkdown
-    updateMarkdown(newMarkdown)
+    // Exiting edit mode re-renders: preserve the live offset across the DOM swap.
+    const liveY = readCurrentScrollY()
+    await updateMarkdown(newMarkdown)
+    window.scrollTo(0, liveY)
+    updateReadingProgress()
   }
   isEditMode.value = false
   isDirty.value = false
@@ -382,7 +454,12 @@ async function finishInPlaceEdit() {
 }
 
 function cancelInPlaceEdit() {
-  updateMarkdown(rawMarkdownContent.value)
+  // Discarding edits re-renders from the saved markdown: keep the live offset.
+  const liveY = readCurrentScrollY()
+  void updateMarkdown(rawMarkdownContent.value).then(() => {
+    window.scrollTo(0, liveY)
+    updateReadingProgress()
+  })
   isEditMode.value = false
   isDirty.value = false
   showToast('✕ 已放弃未保存的修改')
@@ -412,7 +489,7 @@ function handlePaletteSelectFile(item: PaletteItem) {
   if (item.href) {
     chrome.runtime.sendMessage({ type: 'bg-fetch', url: item.href }, (res) => {
       if (res && res.ok && res.res !== undefined) {
-        handleContentChange(res.res, item.href)
+        void handleContentChange(res.res, item.href)
         try {
           history.pushState({ href: item.href }, '', item.href)
         } catch {
@@ -477,7 +554,39 @@ async function handlePaletteAction(actionId: string) {
   }
 }
 
-// Global Shortcuts: Cmd+K, Cmd+B, Cmd+U, Cmd+E, Cmd+S, Cmd+, Alt+C, Alt+H
+// Back/forward through in-place switches (history.pushState): treat it as a
+// document switch with the same save-old / restore-new ordering.
+function handlePopState(e: PopStateEvent) {
+  const stateHref = e.state && typeof (e.state as { href?: unknown }).href === 'string'
+    ? (e.state as { href: string }).href
+    : window.location.href
+  if (!stateHref || stateHref === currentActiveHref.value) return
+  try {
+    chrome.runtime.sendMessage({ type: 'bg-fetch', url: stateHref }, (res) => {
+      if (res && res.ok && res.res !== undefined) {
+        void handleContentChange(res.res, stateHref)
+      } else {
+        flushScrollPosition(currentActiveHref.value)
+        currentActiveHref.value = stateHref
+        window.scrollTo(0, 0)
+        updateReadingProgress()
+      }
+    })
+  } catch {
+    // Extension context invalidated: fall back to a full navigation.
+    window.location.href = stateHref
+  }
+}
+
+function flushCurrentScroll() {
+  flushScrollPosition(currentActiveHref.value)
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    flushScrollPosition(currentActiveHref.value)
+  }
+}
 function handleGlobalKeydown(e: KeyboardEvent) {
   // 焦点在可编辑元素时归还按键，避免劫持宿主页/扩展自身输入框的文本操作；
   // 扩展 UI 内仅保留搜索面板的 Cmd+K 与编辑画布中的 Cmd+S
@@ -552,8 +661,16 @@ function handleStorageChanges(changes: Record<string, chrome.storage.StorageChan
 }
 
 onMounted(async () => {
+  try {
+    // We own scroll restoration per document; the browser default would fight
+    // restoreDocScroll() on reloads and in-place switches.
+    history.scrollRestoration = 'manual'
+  } catch {}
   window.addEventListener('keydown', handleGlobalKeydown)
-  window.addEventListener('scroll', updateReadingProgress, { passive: true })
+  window.addEventListener('scroll', handleWindowScroll, { passive: true })
+  window.addEventListener('popstate', handlePopState)
+  window.addEventListener('pagehide', flushCurrentScroll)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   updateReadingProgress()
   await loadSettings()
   currentTheme.value = settings.value.pageTheme || 'auto'
@@ -566,6 +683,9 @@ onMounted(async () => {
   )
 
   await updateMarkdown(props.initialContent)
+  // First paint: resume this document's remembered place (reload case),
+  // otherwise start at the top.
+  await restoreDocScroll(currentActiveHref.value, scrollSwitchSeq)
 
   if (window.innerWidth < 1100) {
     rightSideOpen.value = false
@@ -584,8 +704,12 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  flushCurrentScroll()
   window.removeEventListener('keydown', handleGlobalKeydown)
-  window.removeEventListener('scroll', updateReadingProgress)
+  window.removeEventListener('scroll', handleWindowScroll)
+  window.removeEventListener('popstate', handlePopState)
+  window.removeEventListener('pagehide', flushCurrentScroll)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
     chrome.storage.onChanged.removeListener(handleStorageChanges)
   }
