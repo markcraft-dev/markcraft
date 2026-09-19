@@ -86,7 +86,7 @@ Ranked by frequency × severity across the sources above. IDs are stable for roa
 
 | Goal | Maps to | Acceptance criteria |
 |---|---|---|
-| **P1-1 Auto-reload on file change** (opt-in per folder, polling + `Last-Modified`, preserve scroll per P0-1) | U6 | Edit file on disk → viewer refreshes ≤2s, scroll kept; toggle in settings; off by default on remote URLs |
+| **P1-1 Auto-reload on file change** (opt-in per folder, polling + `Last-Modified`, preserve scroll per P0-1) | U6 | Edit file on disk → viewer refreshes ≤2s, scroll kept; toggle in settings; off by default on remote URLs. ✅ Shipped 2026-09-19 (t7): `core/doc-watcher.ts` polls via bg-fetch every 1.5s, local `file://` only, paused while editing or switching, stale-fetch guard, scroll kept via same-doc render path |
 | **P1-2 Export: single-file HTML + print/PDF CSS that keeps Mermaid/KaTeX/code intact** (harden existing `export.ts`) | U7 | Exported HTML renders offline pixel-equivalent for a fixture (Mermaid+KaTeX+table+code); `@media print` hides chrome, no clipped code blocks (tested on 3 fixtures) |
 | **P1-3 First-run onboarding**: file-URL toggle guide, native-host nudge, 60-second tour (palette, outline, edit, save) | U1, U5 | Fresh profile: `file://` shows guided card; tour completable <60s; toggle-detection links to `chrome://extensions` |
 | **P1-4 Rich-text copy fidelity pass** (微信/知乎/Notion targets, images inlined or with fallback note) | U9 | Fixture doc (headings/table/code/math/image) pastes into target renderers with headings+lists+table intact; documented limits for math |

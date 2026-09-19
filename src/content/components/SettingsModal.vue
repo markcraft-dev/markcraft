@@ -149,6 +149,18 @@
             ></textarea>
           </div>
 
+          <!-- Auto Reload on File Change (P1-1: opt-in, local files only) -->
+          <div class="flex items-center justify-between gap-12px p-10px rounded-xl border border-[--border-subtle] bg-[--bg-subtle]">
+            <div class="min-w-0">
+              <div class="font-semibold text-[--text-primary] text-12px">文件变更自动重新加载</div>
+              <div class="text-11px text-[--text-muted] mt-2px leading-relaxed">仅本地文件生效；在 VS Code 等编辑器中保存后自动刷新，阅读位置保持不变。编辑模式或有未保存修改时自动暂停。</div>
+            </div>
+            <label class="flex items-center gap-6px text-12px text-[--text-muted] cursor-pointer select-none flex-shrink-0">
+              <input v-model="settings.autoReload" type="checkbox" class="accent-blue-500 cursor-pointer w-3.5 h-3.5" @change="saveChanges" />
+              <span>{{ settings.autoReload ? '已开启' : '已关闭' }}</span>
+            </label>
+          </div>
+
           <!-- About & Feedback Section -->
           <div class="pt-12px border-t border-[--border-color] flex flex-col gap-8px">
             <div class="flex items-center justify-between">

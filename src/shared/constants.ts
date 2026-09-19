@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS = {
   enableCustomCSS: false,
   refresh: 0,
   maxOutlineExpandLevel: 6,
+  autoReload: false,
   mdPlugins: DEFAULT_PLUGINS,
   mdPluginOptions: {},
   charsetCompat: true

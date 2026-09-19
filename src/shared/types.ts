@@ -41,6 +41,8 @@ export interface UserSettings {
   customCSS?: string
   refresh: number
   maxOutlineExpandLevel: number
+  /** P1-1 auto-reload: re-render when the local file changes on disk (opt-in). */
+  autoReload: boolean
   mdPlugins: string[]
   mdPluginOptions: Record<string, any>
   charsetCompat?: boolean

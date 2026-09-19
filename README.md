@@ -13,6 +13,7 @@ It provides a polished Markdown reading experience with in-browser WYSIWYG editi
 - Jump through documents and headings with the ⌘K command palette, outline ScrollSpy, and back-to-top control
 - Export a self-contained HTML file, print to PDF, or copy rich text for pasting into blogs and docs
 - Customize themes, fonts, content width, and Markdown plugins
+- Opt-in auto-reload when a local file changes on disk (reading position preserved)
 - Keep document contents and settings local to the user’s browser and device
 
 ## Install

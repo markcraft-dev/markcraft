@@ -145,6 +145,7 @@ import {
   parseDocUrl,
   syncDocUrl
 } from './core/doc-url'
+import { startDocWatcher, type DocWatcherHandle, type DocWatcherSnapshot } from './core/doc-watcher'
 import { storeFileHandle, storeDirectoryHandle, trySilentSave, trySilentSaveViaDirectory, writeToFileHandle } from './core/file-handle-storage'
 import { tryNativeSave } from './core/native-save'
 import { useStorage, normalizeSettings } from '@/shared/storage'
@@ -314,6 +315,44 @@ function showToast(msg: string) {
   setTimeout(() => {
     toastMessage.value = ''
   }, 2800)
+}
+
+// Auto-reload on file change (P1-1): opt-in via settings, local files only.
+// Rendering goes through the same-document handleContentChange path, so the
+// live scroll offset is preserved; edit mode / unsaved changes pause polling.
+let docWatcher: DocWatcherHandle | null = null
+
+function isDocWatcherPaused() {
+  return isEditMode.value || isDirty.value || pendingSwitchHref !== null
+}
+
+function handleExternalDocChange(fresh: string, baseline: DocWatcherSnapshot) {
+  // Stale-fetch guard: a save, edit, or document switch that landed while
+  // the poll was in flight owns the view now — drop this result.
+  if (baseline.href !== currentActiveHref.value) return
+  if (baseline.content !== rawMarkdownContent.value) return
+  if (isEditMode.value || isDirty.value) return
+  void handleContentChange(fresh).then(() => {
+    showToast('🔄 检测到文件变更，已自动重新加载')
+  })
+}
+
+function syncDocWatcher() {
+  const want = settings.value.autoReload === true && isLocal.value
+  if (want && !docWatcher) {
+    docWatcher = startDocWatcher({
+      fetchContent: fetchDocContent,
+      getSnapshot: () => ({ href: currentActiveHref.value, content: rawMarkdownContent.value }),
+      isPaused: isDocWatcherPaused,
+      isEnabled: () => settings.value.autoReload === true && isLocal.value,
+      onExternalChange: handleExternalDocChange
+    })
+    // Newly enabled: check immediately instead of waiting one interval.
+    docWatcher.checkNow()
+  } else if (!want && docWatcher) {
+    docWatcher.stop()
+    docWatcher = null
+  }
 }
 
 function toggleEditMode() {
@@ -695,6 +734,8 @@ function handleStorageChanges(changes: Record<string, chrome.storage.StorageChan
   const pluginsChanged = JSON.stringify(next.mdPlugins) !== JSON.stringify(settings.value.mdPlugins)
   const themeChanged = next.pageTheme !== settings.value.pageTheme
   settings.value = next
+  // Auto-reload toggle may have flipped (settings modal / popup / options).
+  syncDocWatcher()
   // 同步顶栏主题图标（弹窗/其他标签页修改时本页 currentTheme 不会自动更新）
   currentTheme.value = next.pageTheme
   applyTheme(next.pageTheme)
@@ -727,6 +768,8 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
   updateReadingProgress()
   await loadSettings()
+  // Start the file-change watcher when opted in (local files only).
+  syncDocWatcher()
   currentTheme.value = settings.value.pageTheme || 'auto'
   applyTheme(currentTheme.value)
   applyCustomStyles(
@@ -770,6 +813,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   flushCurrentScroll()
+  if (docWatcher) {
+    docWatcher.stop()
+    docWatcher = null
+  }
   window.removeEventListener('keydown', handleGlobalKeydown)
   window.removeEventListener('scroll', handleWindowScroll)
   window.removeEventListener('popstate', handlePopState)
