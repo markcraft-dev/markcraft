@@ -1,53 +1,20 @@
 <template>
-  <!-- No target: legacy full mask; click = skip -->
+  <!-- Single full-screen mask UNDER the chrome (z-20): header/sidebars sit at
+    z-30/z-40 so every tour target stays crisp, while the z-less main content
+    dims + blurs. Misalignment-proof by construction — no holes to align.
+    Click = skip, uniformly. -->
   <div
-    v-if="!anchor"
-    class="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]"
+    class="fixed inset-0 z-20 bg-black/50 backdrop-blur-[2px]"
     aria-hidden="true"
     @click="$emit('skip')"
   ></div>
-  <!-- Anchored spotlight: shape-following SVG cutout so the target keeps its
-    own corners (round IconButtons get a round hole, not a square halo).
-    Clicks anywhere = skip. -->
-  <template v-else>
-    <!-- Blur layer: same hole punched via an SVG mask, so only the outside blurs -->
-    <div
-      class="fixed inset-0 z-40 backdrop-blur-[2px]"
-      :style="blurMaskStyle"
-      aria-hidden="true"
-      @click="$emit('skip')"
-    ></div>
-    <!-- Dim layer: full-viewport path with an evenodd rounded-rect hole plus a
-      2px primary stroke replacing the old div ring -->
-    <svg
-      class="fixed left-0 top-0 z-40"
-      width="100%"
-      height="100%"
-      aria-hidden="true"
-      @click="$emit('skip')"
-    >
-      <path :d="dimPath" fill="black" fill-opacity="0.5" fill-rule="evenodd" />
-      <rect
-        v-if="holeBox"
-        :x="holeBox.x"
-        :y="holeBox.y"
-        :width="holeBox.w"
-        :height="holeBox.h"
-        :rx="holeBox.r"
-        fill="none"
-        stroke-width="2"
-        style="stroke: var(--primary-color); filter: drop-shadow(0 0 6px var(--primary-color))"
-      />
-    </svg>
-    <!-- Transparent skip-capture over the hole: the target stays visible but
-      mid-tour clicks must not flip its state (same behavior as the mask). -->
-    <div
-      class="fixed z-40"
-      :style="holeCaptureStyle"
-      aria-hidden="true"
-      @click="$emit('skip')"
-    ></div>
-  </template>
+  <!-- Highlight ring around the anchored target (z-50, never interactive) -->
+  <div
+    v-if="ringBox"
+    class="fixed z-50 pointer-events-none tour-ring"
+    :style="ringBoxStyle"
+    aria-hidden="true"
+  ></div>
   <div
     class="fixed z-50 w-[min(420px,90vw)] rounded-2xl border border-white/10 bg-[#18181b] text-white shadow-2xl p-16px select-none"
     :style="bubbleStyle"
@@ -215,11 +182,11 @@ interface HoleBox {
 }
 
 /**
- * Spotlight hole: target rect expanded by RING_PAD, corner radius taken from
- * the target's own computed border-radius (unknown → 10px), clamped to half
- * the short side so pills and round buttons get matching holes.
+ * Ring geometry only (T27): the mask holes are gone — layering keeps targets
+ * crisp instead. Still follows the target's own corner radius so round
+ * buttons get a round ring.
  */
-const holeBox = computed<HoleBox | null>(() => {
+const ringBox = computed<HoleBox | null>(() => {
   const a = props.anchor
   if (!a) return null
   const w = a.width + RING_PAD * 2
@@ -234,58 +201,8 @@ const holeBox = computed<HoleBox | null>(() => {
   }
 })
 
-function roundedRectPath(x: number, y: number, w: number, h: number, r: number): string {
-  const rr = Math.max(0, Math.min(r, w / 2, h / 2))
-  return (
-    `M${x + rr} ${y}` +
-    `H${x + w - rr}Q${x + w} ${y} ${x + w} ${y + rr}` +
-    `V${y + h - rr}Q${x + w} ${y + h} ${x + w - rr} ${y + h}` +
-    `H${x + rr}Q${x} ${y + h} ${x} ${y + h - rr}` +
-    `V${y + rr}Q${x} ${y} ${x + rr} ${y}Z`
-  )
-}
-
-/** Dim path: full viewport with the rounded hole punched via evenodd. */
-const dimPath = computed(() => {
-  const b = holeBox.value
-  if (!b) return ''
-  return `M0 0H${viewportW()}V${viewportH()}H0Z ${roundedRectPath(b.x, b.y, b.w, b.h, b.r)}`
-})
-
-/**
- * Blur mask: same hole geometry as the dim path (single-sourced from holeBox).
- * The hole rect is fully transparent (fill-opacity 0, not just black): the
- * -webkit- mask dialect reads alpha while the standard one reads luminance,
- * so a merely black hole stays opaque under the prefixed prefix and the blur
- * would cover the target. Explicit size/position/repeat pin the data-URI
- * coordinates 1:1 to the viewport in both dialects.
- */
-const blurMaskStyle = computed<Record<string, string>>(() => {
-  const b = holeBox.value
-  if (!b) return {}
-  const vw = viewportW()
-  const vh = viewportH()
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${vw}" height="${vh}" preserveAspectRatio="none">` +
-    `<rect width="${vw}" height="${vh}" fill="white"/>` +
-    `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="${b.r}" fill="black" fill-opacity="0"/>` +
-    `</svg>`
-  const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
-  return {
-    '-webkit-mask-image': url,
-    'mask-image': url,
-    '-webkit-mask-size': '100% 100%',
-    'mask-size': '100% 100%',
-    '-webkit-mask-position': '0 0',
-    'mask-position': '0 0',
-    '-webkit-mask-repeat': 'no-repeat',
-    'mask-repeat': 'no-repeat'
-  }
-})
-
-/** Transparent capture box over the hole (same rounded shape). */
-const holeCaptureStyle = computed<Record<string, string>>(() => {
-  const b = holeBox.value
+const ringBoxStyle = computed<Record<string, string>>(() => {
+  const b = ringBox.value
   if (!b) return {}
   return {
     left: `${b.x}px`,
@@ -309,5 +226,11 @@ const holeCaptureStyle = computed<Record<string, string>>(() => {
      buttons carry an explicit bg-transparent utility instead. */
   transition: opacity 0.12s ease;
   white-space: nowrap;
+}
+.tour-ring {
+  border: 2px solid var(--primary-color);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--primary-color) 22%, transparent),
+    0 0 22px color-mix(in srgb, var(--primary-color) 45%, transparent);
 }
 </style>
