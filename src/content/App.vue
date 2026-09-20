@@ -190,6 +190,7 @@ import {
   hasSeenFlag,
   setSeenFlag,
   pickCopy,
+  parseBorderRadiusToPx,
   TOUR_STEPS,
   SEEN_TOUR_KEY,
   SEEN_SAVE_NUDGE_KEY,
@@ -484,7 +485,14 @@ function queryTourTarget(selector: string): TourAnchorRect | null {
   } catch {
     // Viewport check is best-effort only.
   }
-  return { x: r.x, y: r.y, width: r.width, height: r.height }
+  // T24: target's own corner radius drives the spotlight cutout shape.
+  let radius: number | null = null
+  try {
+    radius = parseBorderRadiusToPx(window.getComputedStyle(el).borderRadius || '', r.width, r.height)
+  } catch {
+    radius = null
+  }
+  return { x: r.x, y: r.y, width: r.width, height: r.height, radius }
 }
 
 function updateTourAnchor() {

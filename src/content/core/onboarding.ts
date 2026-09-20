@@ -95,6 +95,31 @@ export interface TourAnchorRect {
   y: number
   width: number
   height: number
+  /** Target's own corner radius in px (null = unknown); drives the spotlight shape. */
+  radius?: number | null
+}
+
+/**
+ * Parse a computed `border-radius` into px, clamped to half the short side.
+ * Only the first (top-left) value is used; percentages resolve against the
+ * short side. Returns null when unparseable — callers fall back to a default.
+ */
+export function parseBorderRadiusToPx(cssRadius: string, w: number, h: number): number | null {
+  try {
+    const first = (cssRadius || '').trim().split(/\s+/)[0]?.split('/')[0] || ''
+    let v: number | null = null
+    if (first.endsWith('%')) {
+      const p = Number.parseFloat(first)
+      if (Number.isFinite(p)) v = (p / 100) * Math.min(w, h)
+    } else {
+      const p = Number.parseFloat(first)
+      if (Number.isFinite(p)) v = p
+    }
+    if (v === null || v < 0) return null
+    return Math.min(v, Math.min(w, h) / 2)
+  } catch {
+    return null
+  }
 }
 
 /** The 60s tour: palette → outline → edit → save. Four stops, text-only. */
