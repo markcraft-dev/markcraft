@@ -1,10 +1,31 @@
 <template>
-  <!-- Dim + blur the page behind the tour so the bubble stands out; click = skip -->
+  <!-- No target: legacy full mask; click = skip -->
   <div
+    v-if="!anchor"
     class="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]"
     aria-hidden="true"
     @click="$emit('skip')"
   ></div>
+  <!-- Anchored spotlight: four mask panels leave the target rect open so the
+    target stays fully visible instead of dimmed. Clicks anywhere = skip. -->
+  <template v-else>
+    <div
+      v-for="(panel, i) in cutoutPanels"
+      :key="i"
+      class="fixed z-40 bg-black/50 backdrop-blur-[2px]"
+      :style="panel"
+      aria-hidden="true"
+      @click="$emit('skip')"
+    ></div>
+    <!-- Transparent skip-capture over the hole: the target stays visible but
+      mid-tour clicks must not flip its state (same behavior as the mask). -->
+    <div
+      class="fixed z-40"
+      :style="holeStyle"
+      aria-hidden="true"
+      @click="$emit('skip')"
+    ></div>
+  </template>
   <!-- Highlight ring around the anchored target: above the mask, never interactive -->
   <div
     v-if="anchor"
@@ -131,6 +152,46 @@ const bubbleStyle = computed<Record<string, string>>(() => {
 })
 
 const ringStyle = computed<Record<string, string>>(() => {
+  const a = props.anchor
+  if (!a) return {}
+  return {
+    left: `${a.x - RING_PAD}px`,
+    top: `${a.y - RING_PAD}px`,
+    width: `${a.width + RING_PAD * 2}px`,
+    height: `${a.height + RING_PAD * 2}px`
+  }
+})
+
+/**
+ * Spotlight cutout: four panels abutting the ring's outer box so the target
+ * rect stays undimmed. Zero-area panels are dropped. The hole matches the
+ * ring box; the ring's rounded corners may leave hairline dim slivers at the
+ * very corners — hidden under the ring stroke itself.
+ */
+const cutoutPanels = computed<Record<string, string>[]>(() => {
+  const a = props.anchor
+  if (!a) return []
+  const vw = viewportW()
+  const vh = viewportH()
+  const x0 = a.x - RING_PAD
+  const y0 = a.y - RING_PAD
+  const x1 = a.x + a.width + RING_PAD
+  const y1 = a.y + a.height + RING_PAD
+  const panels: Record<string, string>[] = [
+    // top
+    { left: '0px', top: '0px', width: `${vw}px`, height: `${Math.max(0, y0)}px` },
+    // bottom
+    { left: '0px', top: `${y1}px`, width: `${vw}px`, height: `${Math.max(0, vh - y1)}px` },
+    // left
+    { left: '0px', top: `${y0}px`, width: `${Math.max(0, x0)}px`, height: `${y1 - y0}px` },
+    // right
+    { left: `${x1}px`, top: `${y0}px`, width: `${Math.max(0, vw - x1)}px`, height: `${y1 - y0}px` }
+  ]
+  return panels.filter((p) => parseFloat(p.width) > 0 && parseFloat(p.height) > 0)
+})
+
+/** Transparent capture box over the hole (same box as the ring). */
+const holeStyle = computed<Record<string, string>>(() => {
   const a = props.anchor
   if (!a) return {}
   return {
