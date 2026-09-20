@@ -1,4 +1,10 @@
 <template>
+  <!-- Dim + blur the page behind the tour so the bubble stands out; click = skip -->
+  <div
+    class="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]"
+    aria-hidden="true"
+    @click="$emit('skip')"
+  ></div>
   <div
     class="fixed bottom-70px left-1/2 -translate-x-1/2 z-50 w-[min(420px,90vw)] rounded-2xl border border-white/10 bg-[#18181b] text-white shadow-2xl p-16px select-none"
     role="dialog"
@@ -17,12 +23,12 @@
       <div class="flex items-center gap-8px">
         <button
           v-if="!isFirst"
-          class="tour-btn text-white/70 hover:text-white"
+          class="tour-btn bg-transparent text-white/70 hover:text-white"
           @click="$emit('prev')"
         >
           {{ prevLabel }}
         </button>
-        <button class="tour-btn text-white/70 hover:text-white" @click="$emit('skip')">
+        <button class="tour-btn bg-transparent text-white/70 hover:text-white" @click="$emit('skip')">
           {{ skipLabel }}
         </button>
         <button
@@ -80,7 +86,10 @@ const doneLabel = computed(() => (zh ? '完成' : 'Done'))
   cursor: pointer;
   border: 0;
   outline: none;
-  background: transparent;
+  /* NOTE: no background declaration here — the scoped attribute selector
+     outranks Tailwind's bg-white and previously turned the primary
+     Next/Done button transparent (dark text on page = invisible). Ghost
+     buttons carry an explicit bg-transparent utility instead. */
   transition: opacity 0.12s ease;
   white-space: nowrap;
 }
