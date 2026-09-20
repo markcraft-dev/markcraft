@@ -46,22 +46,22 @@
 - **测试**：三 fixture + 降级用例 + 现有构建/类型门禁。
 - **估算**：M。**Phase-2 首批**。
 
-## R2. P1-3 新手引导：file-URL 引导卡 + 60s tour + 存回 nudge（U1/U5）
+## R2. P1-3 新手引导：popup 开关状态 + 60s tour + 存回 nudge（U1/U5）
 
 - **背景/目标**：U1 是全品类通病（Reader/MarkView/MPP 全靠用户自己找到开关）；我们 P0-4 只剩“可发现性”。目标：新用户 60 秒内完成“开开关 → 读文档 → 知道能存回”。
-- **非目标**：多语言引导（中文先行，N4 另排）；自动检测开关状态的黑科技（Chrome 不暴露 API，用启发式：`isLocal && folderTree empty && 无 failure` → 展示引导卡，不误伤真空目录——需与 t2 的 failure/empty 三态联动）。
-- **用户故事**：macOS 双击 md → 看到引导卡 → 点链接跳 `chrome://extensions` 开开关 → 回来即读；tour 气泡依次点亮 palette/大纲/编辑/保存。
+- **非目标**：多语言引导（中文先行，N4 另排）；侧栏内的开关引导卡（T25 结论：伪命题——未开开关时 content-script 根本不注入 `file://` 页，卡片永远渲染不出来；唯一能显示的场合恰恰是开关已开时，只会误报）。
+- **用户故事**：macOS 双击 md 显示原文 → 打开 popup 看到琥珀色“未开启”+ 两步指引 → 去 `chrome://extensions` 开开关 → 回来即读；tour 气泡依次点亮 palette/大纲/编辑/保存。
 - **验收**
-  1. Fresh profile（`[manual]`）：`file://` 无开关态显示引导卡（含icago：为什么、去哪开、在线文档不受影响）；有开关态不打扰。
+  1. Fresh profile（`[manual]`）：popup 显示琥珀色未开启 + 两步文字指引；开启后变绿字；在线文档不受影响。
   2. tour 可跳过、<60s 走完四站、不污染滚动记忆（tour 不触发 scroll save）。
   3. 存回 nudge：首次点保存且无 handle 授权时，提示 native-host 免弹窗选项（`native-host/README.md` 链接），可永久关闭。
-- **现状差距**：无引导组件；`Side.vue` 空态只有“未找到 Markdown 文件”（t2 后有 failure/empty 区分，需再加第三态 `noFileAccess`）。
+- **现状差距**：无引导组件；`Side.vue` 空态只有“未找到 Markdown 文件”（t2 后有 failure/empty 区分）。
 - **技术方案**
-  1. 新增 `src/content/components/OnboardingCard.vue`（引导卡）+ `TourBubble.vue`（极简 tour，两处用 `chrome.storage.local` 记 `seen`）。
-  2. `Side.vue` 空态三改四：loading / failure / genuinely-empty / **noFileAccess(启发式)**；`App.vue` tour 编排（复用现有 toast/快捷键位）。
+  1. `src/popup/App.vue` 状态行：`chrome.extension.isAllowedFileSchemeAccess()`（无新增权限）onMounted 读取，已开启绿字、未开启琥珀色 + 两步文字指引（popup 打不开 `chrome://extensions`，只能文字指引）。
+  2. `TourBubble.vue`（tour，两处用 `chrome.storage.local` 记 `seen`）；`App.vue` tour 编排（复用现有 toast/快捷键位）。
   3. 文案中英双语写死（`_locales` manifest 串复用，应用内硬编码 zh+en，不搭 i18n 框架——N4 另议）。
-- **风险**：启发式误判（真空目录被当成没开开关）→ 文案必须写“如果你确认开过开关请忽略”，且提供“不再提示”。
-- **测试**：三态快照断言 + `[manual]` fresh profile。
+- **风险**：`isAllowedFileSchemeAccess` 回调异常时保持“检测中…”不误报。
+- **测试**：`[manual]` fresh profile 开/关两态。
 - **估算**：M。**Phase-2 首批**。
 
 ## R3. P1-4 富文本粘贴保真（U9，三靶：微信/知乎/Notion）

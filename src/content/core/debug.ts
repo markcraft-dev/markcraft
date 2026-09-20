@@ -3,10 +3,12 @@
  *
  * Read-only enumeration plus targeted clearing; never touches business
  * modules. Two scopes:
- * - 'tour': clears only the 3 onboarding `seen` flags (tour, file-access
- *   guide card, save-back nudge) from chrome.storage.local AND their
- *   localStorage mirrors. The caller reloads so App/Side re-run first-run
- *   paths with everything else (scroll places, recents, settings) intact.
+ * - 'tour': clears only the 2 onboarding `seen` flags (tour, save-back
+ *   nudge) from chrome.storage.local AND their localStorage mirrors. The
+ *   caller reloads so App re-runs first-run paths with everything else
+ *   (scroll places, recents, settings) intact.
+ *   (T25: the file-access guide card is gone, so its retired flag is no
+ *   longer cleared here; the 'all' wipe still removes the stale key.)
  * - 'all': clears every enumerated MarkCraft key (chrome markcraft* keys,
  *   localStorage markcraft* mirrors, the two sessionStorage workspace keys)
  *   and reloads. The bare `settings` key is deliberately preserved — it is
@@ -17,14 +19,12 @@
 
 import {
   SEEN_TOUR_KEY,
-  SEEN_FILE_ACCESS_HINT_KEY,
   SEEN_SAVE_NUDGE_KEY
 } from './onboarding'
 
-/** The 3 onboarding `seen` flags cleared by the 'tour' scope. */
+/** The 2 onboarding `seen` flags cleared by the 'tour' scope. */
 export const TOUR_SEEN_KEYS: readonly string[] = [
   SEEN_TOUR_KEY,
-  SEEN_FILE_ACCESS_HINT_KEY,
   SEEN_SAVE_NUDGE_KEY
 ]
 
@@ -164,7 +164,7 @@ function removeWebKeys(store: Storage | null, keys: string[]): number {
 
 /**
  * Clear MarkCraft state by scope. Returns the number of keys removed.
- * - 'tour': the 3 seen flags (chrome + localStorage mirror). No reload here;
+ * - 'tour': the 2 seen flags (chrome + localStorage mirror). No reload here;
  *   the caller reloads so first-run UI replays with other state intact.
  * - 'all': every enumerated key, then location.reload() so no stale
  *   in-memory copy (scroll/recents caches) survives the wipe.

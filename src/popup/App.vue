@@ -61,13 +61,35 @@
         <input :checked="isPluginActive('Mermaid')" type="checkbox" class="accent-blue-500 cursor-pointer" @change="togglePlugin('Mermaid')" />
       </label>
     </div>
+
+    <!-- Local file access (T25): without this toggle the content script never
+      injects into file:// pages, so toggle education lives here — the popup
+      cannot open chrome://extensions, text guidance only. -->
+    <div class="pt-12px mt-12px border-t border-[--border-color] text-12px">
+      <div class="flex items-center justify-between mb-6px">
+        <span class="font-medium text-[--text-secondary]">本地文件访问</span>
+        <span v-if="fileAccess === null" class="text-[--text-muted]">检测中…</span>
+        <span v-else-if="fileAccess" class="font-semibold" style="color: #16a34a">已开启</span>
+        <span v-else class="font-semibold" style="color: #d97706">未开启</span>
+      </div>
+      <div v-if="fileAccess === true" class="text-11px text-[--text-muted] leading-relaxed">
+        双击 md 可直接阅读，侧栏可列出同目录文档。
+      </div>
+      <div v-else-if="fileAccess === false" class="text-11px text-[--text-muted] leading-relaxed">
+        <p class="mb-4px">双击打开的 md 只显示原文？请开启后重开文件：</p>
+        <ol class="pl-16px list-decimal space-y-2px">
+          <li>打开 chrome://extensions，找到 MarkCraft</li>
+          <li>点「详情」→ 打开「允许访问文件网址」</li>
+        </ol>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import SvgIcon from '@/components/SvgIcon.vue'
 import CustomSelect, { type SelectOption } from '@/components/CustomSelect.vue'
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useStorage } from '@/shared/storage'
 
 const sizeSelectOptions: SelectOption[] = [
@@ -117,8 +139,19 @@ function openOptions() {
   chrome.runtime.openOptionsPage()
 }
 
+// T25: file-URL toggle status — no new permission needed, plain callback API.
+// Unknown/error state stays null ("检测中…") rather than misreporting.
+const fileAccess = ref<boolean | null>(null)
+
 onMounted(() => {
   loadSettings()
+  try {
+    chrome.extension?.isAllowedFileSchemeAccess?.((allowed: boolean) => {
+      fileAccess.value = !!allowed
+    })
+  } catch {
+    fileAccess.value = null
+  }
 })
 </script>
 

@@ -1,7 +1,7 @@
 /**
  * Onboarding foundation (R2): bilingual copy (hardcoded zh+en, no i18n
- * framework) and persistent `seen` flags for the file-access guide card,
- * the 60s tour, and the save-back nudge.
+ * framework) and persistent `seen` flags for the 60s tour and the save-back
+ * nudge.
  *
  * Flags live in chrome.storage.local (shared across tabs, survives reloads)
  * with a synchronous localStorage mirror so the first paint can decide
@@ -9,8 +9,12 @@
  */
 
 export const SEEN_TOUR_KEY = 'markcraft_seen_tour'
-export const SEEN_FILE_ACCESS_HINT_KEY = 'markcraft_seen_file_access_hint'
 export const SEEN_SAVE_NUDGE_KEY = 'markcraft_seen_save_nudge'
+// NOTE (T25): SEEN_FILE_ACCESS_HINT_KEY retired — the sidebar guide card was a
+// false premise (without the file-URL toggle the content script never injects,
+// so the card could only render when the toggle was already on). Toggle
+// education now lives in the popup status row; stale flags are harmless and
+// cleared by the debug 'all' wipe.
 
 export const NATIVE_HOST_README_URL =
   'https://github.com/markcraft-dev/markcraft/blob/main/native-host/README.md'

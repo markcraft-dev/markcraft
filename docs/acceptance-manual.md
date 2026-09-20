@@ -61,14 +61,15 @@ for local-file items. Open fixtures via `file://` drag-drop or folder tree.
 
 ### R2 — onboarding (fresh Chrome profile; retest anytime via one-click reset)
 
-- [ ] `file://` doc without file-URL toggle: guide card explains why + where to enable;
-      online docs unaffected.
+- [ ] `file://` doc without file-URL toggle shows raw text (extension cannot
+      inject) → open the popup: amber 未开启 + two-step text guide to
+      `chrome://extensions` → enable → green 已开启; online docs unaffected.
 - [ ] 60s tour: 4 stations, skippable, finishes <60s, scroll memory untouched.
 - [ ] First save without handle grant: native-host nudge with permanent dismiss.
 - [ ] One-click retest (no fresh profile needed): Settings → 调试/Debug →
-      [重新播放新手引导]/[Replay onboarding] → page reloads with the tour,
-      guide card and save nudge all showing again (Debug key count drops by
-      the 3 seen flags; scroll places, recents and settings untouched).
+      [重新播放新手引导]/[Replay onboarding] → page reloads with the tour
+      and save nudge showing again (Debug key count drops by the 2 seen
+      flags; scroll places, recents and settings untouched).
 - [ ] [清除全部本地状态并重载]/[Wipe local state & reload] → tree resume
       badges and 最近 empty, scroll starts at top, onboarding replays;
       preferences and granted file handles survive (Debug count → 0).
