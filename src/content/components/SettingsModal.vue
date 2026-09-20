@@ -161,6 +161,38 @@
             </label>
           </div>
 
+          <!-- Debug Section (R2 retest aid, always visible): one-click state reset -->
+          <div class="pt-12px border-t border-[--border-color] flex flex-col gap-8px">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-6px">
+                <SvgIcon name="info" class="w-3.5 h-3.5 text-[--text-muted]" />
+                <span class="font-semibold text-[--text-secondary] text-12px">{{ debugTitle }}</span>
+              </div>
+              <span class="text-10px font-mono px-6px py-1px rounded bg-[--bg-subtle] text-[--text-secondary] font-semibold border border-[--border-subtle]">{{ debugCountText }}</span>
+            </div>
+
+            <p class="text-11px text-[--text-muted] leading-relaxed">{{ debugDesc }}</p>
+
+            <div class="grid grid-cols-2 gap-8px text-12px">
+              <button
+                :disabled="debugBusy"
+                class="flex items-center justify-center gap-6px p-7px rounded-lg border border-[--border-subtle] bg-[--bg-subtle] hover:bg-[--bg-hover] text-[--text-primary] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                @click="replayOnboarding"
+              >
+                <SvgIcon name="rotate-ccw" class="w-3.5 h-3.5 text-[--text-muted]" />
+                <span>{{ replayLabel }}</span>
+              </button>
+              <button
+                :disabled="debugBusy"
+                class="flex items-center justify-center gap-6px p-7px rounded-lg border border-red-500/25 bg-red-500/5 hover:bg-red-500/10 text-[--text-primary] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                @click="wipeAllState"
+              >
+                <SvgIcon name="close" class="w-3.5 h-3.5 text-red-400" />
+                <span>{{ wipeLabel }}</span>
+              </button>
+            </div>
+          </div>
+
           <!-- About & Feedback Section -->
           <div class="pt-12px border-t border-[--border-color] flex flex-col gap-8px">
             <div class="flex items-center justify-between">
@@ -227,10 +259,12 @@
 <script setup lang="ts">
 import SvgIcon from '@/components/SvgIcon.vue'
 import CustomSelect, { type SelectOption } from '@/components/CustomSelect.vue'
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStorage } from '@/shared/storage'
 import { DEFAULT_SETTINGS } from '@/shared/constants'
 import { applyTheme, applyCustomStyles } from '../core/theme'
+import { pickCopy } from '../core/onboarding'
+import { enumerateMarkcraftState, clearMarkcraftState } from '../core/debug'
 
 const fontOptions: SelectOption[] = [
   { value: 'Default', label: '系统默认', subLabel: 'System' },
@@ -430,6 +464,62 @@ function finishSettings() {
 function openFullOptions() {
   chrome.runtime.sendMessage({ action: 'open-options-page' })
 }
+
+// Debug section (R2 retest aid): key count + one-click resets. Copy is
+// hardcoded zh+en via isZhLang, same convention as onboarding (no i18n fw).
+const debugKeyCount = ref(0)
+const debugBusy = ref(false)
+const debugTitle = pickCopy('调试', 'Debug')
+const replayLabel = pickCopy('重新播放新手引导', 'Replay onboarding')
+const wipeLabel = pickCopy('清除全部本地状态并重载', 'Wipe local state & reload')
+const debugDesc = pickCopy(
+  '仅清除引导标记并重载页面可复测新手引导（阅读位置与设置保留）；全部清除还会删掉阅读位置、最近文档与目录状态，但保留偏好设置与已授权的文件句柄。',
+  'Replay clears only onboarding flags and reloads (places and settings kept); wipe-all also drops reading places, recents and folder state, but keeps preferences and granted file handles.'
+)
+function debugCountTextFn(): string {
+  return pickCopy(`${debugKeyCount.value} 个本地 key`, `${debugKeyCount.value} local keys`)
+}
+const debugCountText = computed(debugCountTextFn)
+
+async function refreshDebugState(): Promise<void> {
+  try {
+    const snapshot = await enumerateMarkcraftState()
+    debugKeyCount.value = snapshot.entries.length
+  } catch {
+    debugKeyCount.value = 0
+  }
+}
+
+async function replayOnboarding(): Promise<void> {
+  if (debugBusy.value) return
+  debugBusy.value = true
+  try {
+    await clearMarkcraftState('tour')
+    await refreshDebugState()
+  } finally {
+    debugBusy.value = false
+  }
+  // App/Side arm first-run UI at mount, so a reload is what replays it.
+  window.location.reload()
+}
+
+async function wipeAllState(): Promise<void> {
+  if (debugBusy.value) return
+  debugBusy.value = true
+  try {
+    // clearMarkcraftState('all') reloads itself once the wipe lands.
+    await clearMarkcraftState('all')
+  } finally {
+    debugBusy.value = false
+  }
+}
+
+watch(
+  () => props.visible,
+  (val) => {
+    if (val) void refreshDebugState()
+  }
+)
 
 function handleKeyDown(e: KeyboardEvent) {
   if (props.visible && e.key === 'Escape') {
