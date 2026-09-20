@@ -1,6 +1,7 @@
 <template>
   <aside
     aria-label="文章大纲"
+    data-tour="outline-panel"
     class="mdr-right-side fixed top-54px right-14px bottom-14px z-30 flex flex-col bg-[--bg-card]/92 backdrop-blur-xl text-[--text-primary] rounded-2xl border border-[--border-color] shadow-lg select-none print:hidden overflow-hidden transition-[width,transform] duration-200"
     :style="{ width: `${width}px` }"
   >

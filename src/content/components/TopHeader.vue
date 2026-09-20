@@ -69,6 +69,7 @@
       >
         <!-- Save -->
         <button
+          data-tour="save-button"
           class="edit-action-btn"
           :class="isDirty
             ? 'bg-[--primary-color] text-white hover:bg-[--primary-hover] shadow-xs font-semibold'
@@ -106,6 +107,7 @@
       <div class="flex items-center gap-2px p-2px rounded-lg bg-[--bg-subtle]/50 border border-[--border-subtle] flex-shrink-0">
       <!-- Search Palette Button -->
       <IconButton
+        data-tour="search-entry"
         title="搜索"
         shortcut="⌘K"
         @click="$emit('open-search')"
@@ -115,6 +117,7 @@
 
       <!-- Toggle Edit / Preview Mode -->
       <IconButton
+        data-tour="edit-toggle"
         :title="isEditMode ? '完成编辑并返回阅读视图' : '在线编辑文档'"
         shortcut="⌘E"
         :active="isEditMode"

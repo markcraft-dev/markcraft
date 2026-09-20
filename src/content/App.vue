@@ -109,6 +109,7 @@
       :shortcut="tourShortcut"
       :is-first="tourStep === 0"
       :is-last="tourStep === TOUR_STEPS.length - 1"
+      :anchor="tourAnchor"
       @next="tourNext"
       @prev="tourPrev"
       @skip="finishTour"
@@ -175,7 +176,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import TopHeader from './components/TopHeader.vue'
 import Side from './components/Side.vue'
 import RightSidebar from './components/RightSidebar.vue'
@@ -192,7 +193,8 @@ import {
   TOUR_STEPS,
   SEEN_TOUR_KEY,
   SEEN_SAVE_NUDGE_KEY,
-  NATIVE_HOST_README_URL
+  NATIVE_HOST_README_URL,
+  type TourAnchorRect
 } from './core/onboarding'
 import { renderMarkdown, renderMermaidDiagrams, rerenderMermaidDiagrams } from './core/markdown'
 import { sanitizeHtml } from './core/sanitize'
@@ -437,25 +439,111 @@ function toggleRawView() {
 
 // R2 60s tour: four stops, skippable, first-run only. Scroll-save stays
 // suppressed while the tour is active so it never pollutes scroll memory.
+// T20: each stop anchors to its UI (bubble + highlight ring); missing or
+// hidden targets fall back to bottom-center.
 const tourVisible = ref(false)
 const tourStep = ref(0)
+// Viewport-space anchor rect for the bubble/ring; null = bottom-center fallback.
+const tourAnchor = ref<TourAnchorRect | null>(null)
+// True when a stop fell back to its altTarget (save step → edit toggle).
+const tourUsingAlt = ref(false)
 const tourTitle = computed(() => {
   const s = TOUR_STEPS[tourStep.value]
   return s ? pickCopy(s.titleZh, s.titleEn) : ''
 })
 const tourBody = computed(() => {
   const s = TOUR_STEPS[tourStep.value]
-  return s ? pickCopy(s.bodyZh, s.bodyEn) : ''
+  if (!s) return ''
+  if (tourUsingAlt.value && s.altBodyZh !== undefined) {
+    return pickCopy(s.altBodyZh, s.altBodyEn ?? s.bodyEn)
+  }
+  return pickCopy(s.bodyZh, s.bodyEn)
 })
 const tourShortcut = computed(() => TOUR_STEPS[tourStep.value]?.shortcut || '')
+
+function queryTourTarget(selector: string): TourAnchorRect | null {
+  let el: Element | null = null
+  try {
+    el = selector ? document.querySelector(selector) : null
+  } catch {
+    return null
+  }
+  if (!el) return null
+  let r: DOMRect
+  try {
+    r = el.getBoundingClientRect()
+  } catch {
+    return null
+  }
+  // Hidden or collapsed targets (closed sidebar, edit-only buttons) fall back.
+  if (!r || r.width < 4 || r.height < 4) return null
+  try {
+    if (r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth) {
+      return null
+    }
+  } catch {
+    // Viewport check is best-effort only.
+  }
+  return { x: r.x, y: r.y, width: r.width, height: r.height }
+}
+
+function updateTourAnchor() {
+  if (!tourVisible.value) return
+  const s = TOUR_STEPS[tourStep.value]
+  if (!s) {
+    tourAnchor.value = null
+    tourUsingAlt.value = false
+    return
+  }
+  const primary = queryTourTarget(s.target)
+  if (primary) {
+    tourAnchor.value = primary
+    tourUsingAlt.value = false
+    return
+  }
+  if (s.altTarget) {
+    const alt = queryTourTarget(s.altTarget)
+    if (alt) {
+      tourAnchor.value = alt
+      tourUsingAlt.value = true
+      return
+    }
+  }
+  tourAnchor.value = null
+  tourUsingAlt.value = false
+}
+
+let tourRecalcTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleTourAnchorUpdate() {
+  if (!tourVisible.value) return
+  if (tourRecalcTimer !== null) clearTimeout(tourRecalcTimer)
+  tourRecalcTimer = setTimeout(() => {
+    tourRecalcTimer = null
+    void nextTick().then(() => updateTourAnchor())
+  }, 120)
+}
+function handleTourViewportChange() {
+  scheduleTourAnchorUpdate()
+}
 function startTour() {
   suppressScrollSave = true
   tourStep.value = 0
   tourVisible.value = true
+  window.addEventListener('resize', handleTourViewportChange)
+  window.addEventListener('scroll', handleTourViewportChange, { passive: true })
+  void nextTick().then(() => updateTourAnchor())
 }
 function finishTour() {
   tourVisible.value = false
   suppressScrollSave = false
+  tourAnchor.value = null
+  tourUsingAlt.value = false
+  if (tourRecalcTimer !== null) {
+    clearTimeout(tourRecalcTimer)
+    tourRecalcTimer = null
+  }
+  window.removeEventListener('resize', handleTourViewportChange)
+  window.removeEventListener('scroll', handleTourViewportChange)
   void setSeenFlag(SEEN_TOUR_KEY)
 }
 function tourNext() {
@@ -463,11 +551,20 @@ function tourNext() {
     finishTour()
   } else {
     tourStep.value += 1
+    void nextTick().then(() => updateTourAnchor())
   }
 }
 function tourPrev() {
-  if (tourStep.value > 0) tourStep.value -= 1
+  if (tourStep.value > 0) {
+    tourStep.value -= 1
+    void nextTick().then(() => updateTourAnchor())
+  }
 }
+// The save stop resolves dynamically (save button vs edit toggle): re-anchor
+// when edit mode flips mid-tour. No-op while the tour is hidden.
+watch(isEditMode, () => {
+  scheduleTourAnchorUpdate()
+})
 
 // R2 save-back nudge: shown once when a save reaches the manual-authorization
 // path (no silent handle, no native host). Dismissible forever.

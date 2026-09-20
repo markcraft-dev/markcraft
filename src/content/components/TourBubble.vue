@@ -5,8 +5,16 @@
     aria-hidden="true"
     @click="$emit('skip')"
   ></div>
+  <!-- Highlight ring around the anchored target: above the mask, never interactive -->
   <div
-    class="fixed bottom-70px left-1/2 -translate-x-1/2 z-50 w-[min(420px,90vw)] rounded-2xl border border-white/10 bg-[#18181b] text-white shadow-2xl p-16px select-none"
+    v-if="anchor"
+    class="fixed z-50 pointer-events-none rounded-xl tour-ring"
+    :style="ringStyle"
+    aria-hidden="true"
+  ></div>
+  <div
+    class="fixed z-50 w-[min(420px,90vw)] rounded-2xl border border-white/10 bg-[#18181b] text-white shadow-2xl p-16px select-none"
+    :style="bubbleStyle"
     role="dialog"
     aria-label="MarkCraft tour"
   >
@@ -44,9 +52,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { isZhLang } from '../core/onboarding'
+import { isZhLang, type TourAnchorRect } from '../core/onboarding'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     step?: number
     total?: number
@@ -55,6 +63,8 @@ withDefaults(
     shortcut?: string
     isFirst?: boolean
     isLast?: boolean
+    /** Viewport-space target rect from App; null = bottom-center fallback. */
+    anchor?: TourAnchorRect | null
   }>(),
   {
     step: 0,
@@ -63,7 +73,8 @@ withDefaults(
     body: '',
     shortcut: '',
     isFirst: true,
-    isLast: true
+    isLast: true,
+    anchor: null
   }
 )
 
@@ -78,6 +89,57 @@ const prevLabel = computed(() => (zh ? '上一步' : 'Back'))
 const nextLabel = computed(() => (zh ? '下一步' : 'Next'))
 const skipLabel = computed(() => (zh ? '跳过' : 'Skip'))
 const doneLabel = computed(() => (zh ? '完成' : 'Done'))
+
+const RING_PAD = 6
+const GAP = 12
+// Rough bubble height for the above/below flip decision (measured post-mount
+// would be nicer; fixed estimate keeps this dependency-free and stable).
+const EST_BUBBLE_H = 200
+
+function viewportW(): number {
+  try {
+    return window.innerWidth || 1024
+  } catch {
+    return 1024
+  }
+}
+
+function viewportH(): number {
+  try {
+    return window.innerHeight || 768
+  } catch {
+    return 768
+  }
+}
+
+/** Bubble position: near the anchor with auto above/below flip + edge clamp. */
+const bubbleStyle = computed<Record<string, string>>(() => {
+  const a = props.anchor
+  if (!a) {
+    return { left: '50%', bottom: '70px', transform: 'translateX(-50%)' }
+  }
+  const vw = viewportW()
+  const vh = viewportH()
+  const w = Math.min(420, vw * 0.9)
+  const cx = a.x + a.width / 2
+  const left = Math.max(8, Math.min(cx - w / 2, vw - w - 8))
+  const below = vh - (a.y + a.height)
+  if (below >= EST_BUBBLE_H + GAP) {
+    return { left: `${left}px`, top: `${a.y + a.height + GAP}px` }
+  }
+  return { left: `${left}px`, top: `${Math.max(8, a.y - EST_BUBBLE_H - GAP)}px` }
+})
+
+const ringStyle = computed<Record<string, string>>(() => {
+  const a = props.anchor
+  if (!a) return {}
+  return {
+    left: `${a.x - RING_PAD}px`,
+    top: `${a.y - RING_PAD}px`,
+    width: `${a.width + RING_PAD * 2}px`,
+    height: `${a.height + RING_PAD * 2}px`
+  }
+})
 </script>
 
 <style scoped>
@@ -92,5 +154,11 @@ const doneLabel = computed(() => (zh ? '完成' : 'Done'))
      buttons carry an explicit bg-transparent utility instead. */
   transition: opacity 0.12s ease;
   white-space: nowrap;
+}
+.tour-ring {
+  border: 2px solid var(--primary-color);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--primary-color) 22%, transparent),
+    0 0 22px color-mix(in srgb, var(--primary-color) 45%, transparent);
 }
 </style>
