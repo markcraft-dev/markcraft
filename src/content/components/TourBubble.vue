@@ -148,7 +148,7 @@ function viewportH(): number {
   }
 }
 
-/** Bubble position: near the anchor with auto above/below flip + edge clamp. */
+/** Bubble position: four-side max-space placement that never covers the target. */
 const bubbleStyle = computed<Record<string, string>>(() => {
   const a = props.anchor
   if (!a) {
@@ -156,14 +156,54 @@ const bubbleStyle = computed<Record<string, string>>(() => {
   }
   const vw = viewportW()
   const vh = viewportH()
+  const M = 8
   const w = Math.min(420, vw * 0.9)
-  const cx = a.x + a.width / 2
-  const left = Math.max(8, Math.min(cx - w / 2, vw - w - 8))
-  const below = vh - (a.y + a.height)
-  if (below >= EST_BUBBLE_H + GAP) {
-    return { left: `${left}px`, top: `${a.y + a.height + GAP}px` }
+  const h = EST_BUBBLE_H
+  // Hole outer box (ring included) so the bubble clears the stroke, not just the target.
+  const hx0 = a.x - RING_PAD
+  const hy0 = a.y - RING_PAD
+  const hx1 = a.x + a.width + RING_PAD
+  const hy1 = a.y + a.height + RING_PAD
+  const space = {
+    below: vh - hy1,
+    above: hy0,
+    right: vw - hx1,
+    left: hx0
   }
-  return { left: `${left}px`, top: `${Math.max(8, a.y - EST_BUBBLE_H - GAP)}px` }
+  const fits = {
+    below: space.below >= h + GAP,
+    above: space.above >= h + GAP,
+    right: space.right >= w + GAP,
+    left: space.left >= w + GAP
+  }
+  // Max space wins; ties prefer left (right-edge targets open leftward),
+  // then below, above, right.
+  type Side = 'below' | 'above' | 'left' | 'right'
+  const order: Side[] = ['left', 'below', 'above', 'right']
+  const fitting = order.filter((s) => fits[s])
+  let side: Side
+  if (fitting.length > 0) {
+    const best = Math.max(...fitting.map((s) => space[s]))
+    side = fitting.find((s) => space[s] === best) ?? 'below'
+  } else {
+    // Nothing fits outright (tiny viewport): still take the roomiest side.
+    side = order.reduce((best, s) => (space[s] > space[best] ? s : best))
+  }
+  const clampX = (x: number) => Math.max(M, Math.min(x, vw - w - M))
+  if (side === 'below') {
+    const cx = a.x + a.width / 2
+    return { left: `${clampX(cx - w / 2)}px`, top: `${hy1 + GAP}px` }
+  }
+  if (side === 'above') {
+    const cx = a.x + a.width / 2
+    return { left: `${clampX(cx - w / 2)}px`, top: `${Math.max(M, hy0 - GAP - h)}px` }
+  }
+  const cy = a.y + a.height / 2
+  const top = Math.max(M, Math.min(cy - h / 2, vh - h - M))
+  if (side === 'right') {
+    return { left: `${Math.max(M, Math.min(hx1 + GAP, vw - w - M))}px`, top: `${top}px` }
+  }
+  return { left: `${Math.max(M, hx0 - GAP - w)}px`, top: `${top}px` }
 })
 
 interface HoleBox {
@@ -212,19 +252,35 @@ const dimPath = computed(() => {
   return `M0 0H${viewportW()}V${viewportH()}H0Z ${roundedRectPath(b.x, b.y, b.w, b.h, b.r)}`
 })
 
-/** Blur mask: same shape as data-URI (white outside, transparent hole). */
+/**
+ * Blur mask: same hole geometry as the dim path (single-sourced from holeBox).
+ * The hole rect is fully transparent (fill-opacity 0, not just black): the
+ * -webkit- mask dialect reads alpha while the standard one reads luminance,
+ * so a merely black hole stays opaque under the prefixed prefix and the blur
+ * would cover the target. Explicit size/position/repeat pin the data-URI
+ * coordinates 1:1 to the viewport in both dialects.
+ */
 const blurMaskStyle = computed<Record<string, string>>(() => {
   const b = holeBox.value
   if (!b) return {}
   const vw = viewportW()
   const vh = viewportH()
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${vw}" height="${vh}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${vw}" height="${vh}" preserveAspectRatio="none">` +
     `<rect width="${vw}" height="${vh}" fill="white"/>` +
-    `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="${b.r}" fill="black"/>` +
+    `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="${b.r}" fill="black" fill-opacity="0"/>` +
     `</svg>`
   const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
-  return { '-webkit-mask-image': url, 'mask-image': url }
+  return {
+    '-webkit-mask-image': url,
+    'mask-image': url,
+    '-webkit-mask-size': '100% 100%',
+    'mask-size': '100% 100%',
+    '-webkit-mask-position': '0 0',
+    'mask-position': '0 0',
+    '-webkit-mask-repeat': 'no-repeat',
+    'mask-repeat': 'no-repeat'
+  }
 })
 
 /** Transparent capture box over the hole (same rounded shape). */
