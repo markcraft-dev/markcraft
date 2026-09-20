@@ -63,15 +63,17 @@
         <span class="px-8px py-4px text-11px text-[--text-muted]">正在加载目录…</span>
       </div>
 
-      <!-- Load Failure State: distinct from a genuinely empty folder.
-        常见原因是未开启「允许访问文件网址」或 SW 冷启动仍失败，提供重试入口 -->
-      <div v-else-if="loadError" class="flex flex-col items-center justify-center p-24px text-center text-12px text-[--text-muted]">
-        <SvgIcon name="folder" class="w-8 h-8 mb-8px opacity-25 text-[--text-muted]"  />
-        <span class="font-medium text-[--text-secondary] mb-4px">目录加载失败</span>
-        <span class="mb-8px leading-relaxed">{{ loadError }}</span>
-        <span class="mb-12px leading-relaxed opacity-80">请确认已在 chrome://extensions → MarkCraft 详情页开启「允许访问文件网址」</span>
+      <!-- Load Failure State: dark guide card in the TourBubble visual language
+        (#18181b + white + primary button), so all guidance surfaces read as one family -->
+      <div v-else-if="loadError" class="mx-2px rounded-2xl bg-[#18181b] text-white p-16px shadow-lg">
+        <div class="flex items-center gap-8px mb-6px">
+          <SvgIcon name="folder" class="w-5 h-5 opacity-60" />
+          <span class="font-semibold text-13px">目录加载失败</span>
+        </div>
+        <p class="text-12px leading-relaxed text-white/80 mb-8px">{{ loadError }}</p>
+        <p class="text-12px leading-relaxed text-white/60 mb-12px">请确认已在 chrome://extensions → MarkCraft 详情页开启「允许访问文件网址」</p>
         <button
-          class="px-12px py-6px rounded-lg text-12px font-medium cursor-pointer border border-[--border-color] bg-[--bg-hover] text-[--text-primary] hover:opacity-85 transition-opacity"
+          class="px-12px py-6px rounded-lg text-12px font-semibold cursor-pointer border-0 bg-white text-[#18181b] hover:opacity-90 transition-opacity"
           @click="retryLoad"
         >
           重试
@@ -201,7 +203,17 @@ let loadSeq = 0
 // the guide for users who already dismissed it), then reveal when the async
 // storage read proves otherwise.
 const fileAccessHintDismissed = ref(hasSeenFlagSync(SEEN_FILE_ACCESS_HINT_KEY))
-const showNoFileAccess = computed(() => props.isLocal && !fileAccessHintDismissed.value)
+// T19: gate on the tree, not just the flag — a healthy file list must never
+// show the guide card. (The v-else-if chain already implies !isLoading and
+// !loadError; stated explicitly so the state reads correctly in isolation.)
+const showNoFileAccess = computed(
+  () =>
+    props.isLocal &&
+    !isLoading.value &&
+    !loadError.value &&
+    folderTree.value.length === 0 &&
+    !fileAccessHintDismissed.value
+)
 
 function dismissFileAccessHint() {
   fileAccessHintDismissed.value = true

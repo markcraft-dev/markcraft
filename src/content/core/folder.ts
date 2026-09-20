@@ -95,7 +95,8 @@ function fetchDirectoryHtml(url: string): Promise<string> {
       }
       lastMsg = res?.msg || ''
       if (attempt < DIRECTORY_FETCH_MAX_ATTEMPTS) {
-        console.warn(
+        // 中间重试只是 SW 冷启动的预期抖动：debug 即可，最终失败才 warn/error
+        console.debug(
           `[MarkCraft] directory fetch failed (attempt ${attempt}/${DIRECTORY_FETCH_MAX_ATTEMPTS}) for ${normalizedUrl}: ${lastMsg || 'unknown error'} — retrying`
         )
         await sleep(DIRECTORY_FETCH_RETRY_DELAYS_MS[attempt - 1] ?? 500)

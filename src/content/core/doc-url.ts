@@ -162,12 +162,15 @@ export function syncDocUrl(href: string, opts?: DocSwitchUrlOptions): string {
     history[method]({ mdrHref: href }, '', href)
     return href
   } catch (e) {
-    console.warn(`[MarkCraft] full-URL history sync failed (${method} → ${href}); falling back to hash route:`, e)
+    // file:// opaque origin 下 full-URL pushState 抛 SecurityError 是预期平台
+    // 行为：静默转 hash 兜底，全程只 debug
+    console.debug(`[MarkCraft] full-URL history sync unavailable (${method}), using hash route:`, e)
   }
   try {
     const base = stripDocPointer(window.location.href).split('#')[0]
     const next = `${base}${DOC_HASH_PREFIX}${encodeURIComponent(href)}`
     history[method]({ mdrHref: href }, '', next)
+    console.debug(`[MarkCraft] hash route history sync ok (${method}): ${next}`)
     return next
   } catch (e) {
     console.warn('[MarkCraft] hash history sync failed; address bar will stay stale:', e)
