@@ -1,5 +1,6 @@
 node_modules/
-dist/resources/
+# Build output (CI/release build from source; never tracked)
+dist/
 public/resources/
 .DS_Store
 *.log
