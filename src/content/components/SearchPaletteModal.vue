@@ -71,51 +71,6 @@
 
         <!-- Scrollable Search Results List -->
         <div class="max-h-[min(58vh,520px)] overflow-y-auto p-10px flex flex-col gap-3px">
-          <!-- R6 Pinned Recents (empty query, files tab): resumes via normal switch -->
-          <div v-if="showPinnedRecents">
-            <div class="px-12px py-6px text-11px font-semibold text-[--text-muted] uppercase tracking-wider flex items-center justify-between">
-              <span>最近阅读</span>
-              <span class="text-10px font-normal opacity-70">Enter 继续阅读</span>
-            </div>
-
-            <div
-              v-for="(item, rIdx) in pinnedRecents"
-              :key="item.id || item.href"
-              class="flex items-center justify-between px-12px py-9px rounded-xl cursor-pointer transition-all select-none group"
-              :class="selectedIndex === rIdx
-                ? 'bg-[--bg-hover] text-[--text-primary] font-medium shadow-xs ring-1 ring-[--primary-color]/40'
-                : 'text-[--text-secondary] hover:bg-[--bg-hover] hover:text-[--text-primary]'"
-              @mouseenter="selectedIndex = rIdx"
-              @click="handleItemClick(item)"
-            >
-              <!-- File Name & Progress Info -->
-              <div class="flex items-center gap-10px min-w-0 flex-1 mr-14px">
-                <span class="p-5px rounded-lg bg-[--bg-subtle] border border-[--border-subtle] flex-shrink-0">
-                  <SvgIcon name="clock" class="w-4 h-4 text-[--primary-color]" />
-                </span>
-
-                <div class="flex flex-col min-w-0">
-                  <div class="flex items-center gap-8px">
-                    <span class="text-13px font-semibold text-[--text-primary] truncate tracking-tight">{{ item.title }}</span>
-                  </div>
-                  <span v-if="item.subPath" class="text-11px text-[--text-muted] truncate font-mono mt-1px">
-                    {{ item.subPath }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Action Indicator Pill -->
-              <div class="flex items-center gap-6px flex-shrink-0">
-                <span
-                  v-if="selectedIndex === rIdx"
-                  class="text-11px font-mono text-[--primary-color] px-8px py-3px rounded-md bg-[--primary-light] font-semibold flex items-center gap-4px border border-[--primary-color]/25 shadow-xs"
-                >
-                  ↵ 继续
-                </span>
-              </div>
-            </div>
-          </div>
-
           <!-- Files & Outline Section -->
           <div v-if="activeTab === 'files' && filteredItems.length > 0">
             <div class="px-12px py-6px text-11px font-semibold text-[--text-muted] uppercase tracking-wider flex items-center justify-between">
@@ -127,10 +82,10 @@
               v-for="(item, idx) in filteredItems"
               :key="item.id || item.href"
               class="flex items-center justify-between px-12px py-9px rounded-xl cursor-pointer transition-all select-none group"
-              :class="selectedIndex === pinnedRecents.length + idx
+              :class="selectedIndex === idx
                 ? 'bg-[--bg-hover] text-[--text-primary] font-medium shadow-xs ring-1 ring-[--primary-color]/40'
                 : 'text-[--text-secondary] hover:bg-[--bg-hover] hover:text-[--text-primary]'"
-              @mouseenter="selectedIndex = pinnedRecents.length + idx"
+              @mouseenter="selectedIndex = idx"
               @click="handleItemClick(item)"
             >
               <!-- File Name & Path Info -->
@@ -153,7 +108,7 @@
               <!-- Action Indicator Pill -->
               <div class="flex items-center gap-6px flex-shrink-0">
                 <span
-                  v-if="selectedIndex === pinnedRecents.length + idx"
+                  v-if="selectedIndex === idx"
                   class="text-11px font-mono text-[--primary-color] px-8px py-3px rounded-md bg-[--primary-light] font-semibold flex items-center gap-4px border border-[--primary-color]/25 shadow-xs"
                 >
                   ↵ 打开
@@ -292,7 +247,6 @@ import {
   FULLTEXT_LIMIT,
   type FulltextStatus
 } from '../core/search-index'
-import { ensureRecentsLoaded, getRecents, subscribeRecents } from '../core/recents'
 import type { TreeNodeItem, OutlineItem } from '@/shared/types'
 
 export type { PaletteItem }
@@ -340,24 +294,6 @@ const actions = [
   { id: 'fullscreen', title: '全屏沉浸阅读', shortcut: '⌘F', icon: 'maximize' },
   { id: 'print', title: '打印 / 导出 PDF', shortcut: '⌘P', icon: 'printer' }
 ]
-
-// R6 palette 置顶：空查询 + 文件 tab 时 pin 最近阅读（带 % 回位提示）。
-// recentsTick 把模块态 store 接入响应式：打开时 warm + 订阅，关闭时退订。
-const recentsTick = ref(0)
-let unsubRecents: (() => void) | null = null
-const pinnedRecents = computed<PaletteItem[]>(() => {
-  void recentsTick.value
-  if (activeTab.value !== 'files' || query.value.trim()) return []
-  return getRecents()
-    .slice(0, 8)
-    .map((r) => ({
-      id: `recent:${r.key}`,
-      title: r.title,
-      href: r.href,
-      subPath: r.progress > 0 ? `最近阅读 · 读到 ${r.progress}%` : '最近阅读'
-    }))
-})
-const showPinnedRecents = computed(() => pinnedRecents.value.length > 0)
 
 // 条目汇总与过滤位于 Rust（search_palette），此处仅异步取回结果
 const filteredItems = ref<PaletteItem[]>([])
@@ -411,22 +347,16 @@ watch(
     if (seq === searchSeq) {
       filteredItems.value = items
       // 结果刷新时夹紧而非归零：输入过程中键盘选择不再跳回首项
-      // （上限含置顶的最近条目）。
-      selectedIndex.value = Math.min(
-        selectedIndex.value,
-        pinnedRecents.value.length + items.length + actions.length - 1
-      )
+      selectedIndex.value = Math.min(selectedIndex.value, items.length + actions.length - 1)
       if (selectedIndex.value < 0) selectedIndex.value = 0
     }
   },
   { immediate: true }
 )
 
-// 当前 tab 的结果条数：文件 tab = 置顶最近 + 文件/章节；键盘导航与计数共用
+// 当前 tab 的结果条数：键盘导航与计数共用
 const activeListLength = computed(() =>
-  activeTab.value === 'content'
-    ? fulltextHits.value.length
-    : pinnedRecents.value.length + filteredItems.value.length
+  activeTab.value === 'content' ? fulltextHits.value.length : filteredItems.value.length
 )
 const totalCount = computed(() => activeListLength.value + actions.length)
 
@@ -447,14 +377,11 @@ function selectCurrent() {
     }
     return
   }
-  const pinned = pinnedRecents.value
   const list = filteredItems.value
-  if (selectedIndex.value < pinned.length) {
-    handleItemClick(pinned[selectedIndex.value])
-  } else if (selectedIndex.value < pinned.length + list.length) {
-    handleItemClick(list[selectedIndex.value - pinned.length])
+  if (selectedIndex.value < list.length) {
+    handleItemClick(list[selectedIndex.value])
   } else {
-    const action = actions[selectedIndex.value - pinned.length - list.length]
+    const action = actions[selectedIndex.value - list.length]
     if (action) handleActionClick(action)
   }
 }
@@ -488,21 +415,9 @@ watch(
       void ensureFulltextIndex(props.files).then((s) => {
         ftStatus.value = s
       })
-      // R6: warm 最近列表并订阅（快照写入时置顶区实时更新）
-      unsubRecents?.()
-      unsubRecents = subscribeRecents(() => {
-        recentsTick.value++
-      })
-      void ensureRecentsLoaded().then(() => {
-        recentsTick.value++
-      })
-    } else {
-      if (ftDebounce !== null) {
-        window.clearTimeout(ftDebounce)
-        ftDebounce = null
-      }
-      unsubRecents?.()
-      unsubRecents = null
+    } else if (ftDebounce !== null) {
+      window.clearTimeout(ftDebounce)
+      ftDebounce = null
     }
   }
 )

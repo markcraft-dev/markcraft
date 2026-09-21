@@ -473,8 +473,8 @@ const debugTitle = pickCopy('调试', 'Debug')
 const replayLabel = pickCopy('重新播放新手引导', 'Replay onboarding')
 const wipeLabel = pickCopy('清除全部本地状态并重载', 'Wipe local state & reload')
 const debugDesc = pickCopy(
-  '仅清除引导标记并重载页面可复测新手引导（阅读位置与设置保留）；全部清除还会删掉阅读位置、最近文档与目录状态，但保留偏好设置与已授权的文件句柄。',
-  'Replay clears only onboarding flags and reloads (places and settings kept); wipe-all also drops reading places, recents and folder state, but keeps preferences and granted file handles.'
+  '仅清除引导标记并重载页面可复测新手引导（阅读位置与设置保留）；全部清除还会删掉阅读位置与目录状态，但保留偏好设置与已授权的文件句柄。',
+  'Replay clears only onboarding flags and reloads (places and settings kept); wipe-all also drops reading places and folder state, but keeps preferences and granted file handles.'
 )
 function debugCountTextFn(): string {
   return pickCopy(`${debugKeyCount.value} 个本地 key`, `${debugKeyCount.value} local keys`)

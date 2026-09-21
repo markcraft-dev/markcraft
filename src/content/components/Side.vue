@@ -40,22 +40,6 @@
         <span class="truncate font-medium">.. 返回上一级</span>
       </div>
 
-      <!-- R6 最近 group: newest-first, workspace-scoped; resume via normal switch -->
-      <div v-if="workspaceRecents.length > 0" class="mb-4px">
-        <div class="px-8px py-4px text-11px font-medium text-[--text-muted] uppercase tracking-wider">
-          <span>最近阅读</span>
-        </div>
-        <TreeNode
-          v-for="item in workspaceRecents"
-          :key="item.id || item.href"
-          :item="item"
-          :progress-map="progressMap"
-          @toggle="handleFolderToggle"
-          @select="handleFileSelect"
-          @open-new-tab="handleOpenNewTab"
-        />
-      </div>
-
       <!-- Loading State: skeleton rows while the first directory fetch is in flight.
         file:// 冷启动时 SW 尚未唤醒会有数百毫秒重试窗口，此前版本直接显示空态造成“随机为空”错觉 -->
       <div v-if="isLoading" class="flex flex-col gap-6px p-4px" aria-label="正在加载目录" aria-busy="true">
@@ -91,7 +75,6 @@
         v-for="item in folderTree"
         :key="item.id || item.href"
         :item="item"
-        :progress-map="progressMap"
         @toggle="handleFolderToggle"
         @select="handleFileSelect"
         @open-new-tab="handleOpenNewTab"
@@ -123,13 +106,11 @@
 
 <script setup lang="ts">
 import SvgIcon from '@/components/SvgIcon.vue'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import TreeNode from './TreeNode.vue'
 import IconButton from '@/components/IconButton.vue'
 import IconLogo from '@/components/icons/IconLogo.vue'
 import { fetchDirectory, getParentFolderURL, resolveAncestorFolderURLs, hasDirectoryReadFailure, getLastDirectoryError, clearDirectoryCache } from '../core/folder'
-import { ensureRecentsLoaded, getRecents, subscribeRecents, type RecentDoc } from '../core/recents'
-import { normalizeScrollKey } from '../core/scroll-memory'
 import type { TreeNodeItem } from '@/shared/types'
 
 const STORAGE_ROOT_KEY = 'markcraft_workspace_root'
@@ -159,31 +140,6 @@ const sideWidth = ref(props.width)
 const folderTree = ref<TreeNodeItem[]>([])
 const currentWorkspaceRoot = ref('')
 const activeHref = ref(window.location.href)
-// R6/R9: recents store snapshot for the 最近 group + tree resume badges.
-// progressMap keys are normalizeScrollKey hrefs (hash-stripped).
-const recentDocs = ref<RecentDoc[]>([])
-const progressMap = computed<Record<string, number>>(() => {
-  const map: Record<string, number> = {}
-  for (const r of recentDocs.value) map[r.key] = r.progress
-  return map
-})
-// 最近 group: workspace-scoped (prefix match on the current root), newest
-// first; clicking one switches + resumes via the normal scroll-memory path,
-// so "continue reading" needs no separate affordance beyond the % badge.
-const workspaceRecents = computed<TreeNodeItem[]>(() => {
-  const root = currentWorkspaceRoot.value || getParentFolderURL()
-  return recentDocs.value
-    .filter((r) => r.href.startsWith(root))
-    .slice(0, 6)
-    .map((r) => ({
-      id: `recent-${normalizeScrollKey(r.href)}`,
-      content: r.title,
-      isFolder: false,
-      href: r.href,
-      active: normalizeScrollKey(r.href) === normalizeScrollKey(activeHref.value)
-    }))
-})
-let unsubscribeRecents: (() => void) | null = null
 // 加载态 / 失败态与空目录态三分：避免首屏竞态下把“还没回来”渲染成“没有文件”
 const isLoading = ref(false)
 const loadError = ref('')
@@ -326,12 +282,6 @@ function setActiveHref(href: string) {
   updateActiveNodeRecursively(folderTree.value, href)
 }
 
-// R6/R9: recents feed the 最近 group + resume badges; subscription refreshes
-// badges as snapshots land (debounced writes, so no flicker).
-function refreshRecents(list: RecentDoc[]) {
-  recentDocs.value = list
-}
-
 async function handleFileSelect(item: TreeNodeItem) {
   if (activeHref.value === item.href) {
     return
@@ -385,14 +335,7 @@ function startResize(e: MouseEvent) {
 onMounted(() => {
   if (props.isLocal) {
     loadFolderTree()
-    void ensureRecentsLoaded().then(refreshRecents)
-    unsubscribeRecents = subscribeRecents(refreshRecents)
   }
-})
-
-onUnmounted(() => {
-  unsubscribeRecents?.()
-  unsubscribeRecents = null
 })
 
 defineExpose({

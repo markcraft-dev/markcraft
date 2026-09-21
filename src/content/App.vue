@@ -222,12 +222,6 @@ import {
 import { startDocWatcher, type DocWatcherHandle, type DocWatcherSnapshot } from './core/doc-watcher'
 import { storeFileHandle, storeDirectoryHandle, trySilentSave, trySilentSaveViaDirectory, writeToFileHandle } from './core/file-handle-storage'
 import { tryNativeSave } from './core/native-save'
-import {
-  ensureRecentsLoaded,
-  recordReadingSnapshot,
-  scheduleReadingSnapshot,
-  touchRecent
-} from './core/recents'
 import { useStorage, normalizeSettings } from '@/shared/storage'
 import type { OutlineItem, PageTheme, TreeNodeItem } from '@/shared/types'
 
@@ -288,9 +282,6 @@ function handleWindowScroll() {
   updateReadingProgress()
   if (!suppressScrollSave) {
     scheduleSaveScrollPosition(currentActiveHref.value)
-    // R9: same rhythm family as the offset save, lazier write — feeds the
-    // recents snapshots (sidebar resume badges) without thrashing storage.
-    scheduleReadingSnapshot(currentActiveHref.value)
   }
 }
 
@@ -381,9 +372,6 @@ async function handleContentChange(newContent: string, newHref?: string, urlOpts
       // Save-then-restore ordering: persist A's offset BEFORE it is replaced,
       // otherwise A's place is lost and B inherits A's viewport (Bug1).
       flushScrollPosition(oldHref)
-      // R6/R9: snapshot A's place (scrollY + progress) at the same moment so
-      // the recents store and the scroll store never disagree.
-      recordReadingSnapshot(oldHref)
     }
     // Else: the old document never settled (fast double-switch) — its live
     // viewport still shows an even older document, so leave its stored
@@ -402,11 +390,6 @@ async function handleContentChange(newContent: string, newHref?: string, urlOpts
     // reopen exactly this document, and scroll-memory restores its offset.
     syncDocUrl(nextHref, urlOpts)
     await restoreDocScroll(nextHref, mySwitch)
-    // R6: the new document is now the most recent; its entry carries the
-    // restored place, later refined by scroll snapshots as the user reads.
-    if (mySwitch === scrollSwitchSeq) {
-      touchRecent(nextHref, { scrollY: readCurrentScrollY(), progress: readingProgress.value })
-    }
   } else if (currentActiveHref.value === nextHref) {
     window.scrollTo(0, liveY)
     updateReadingProgress()
@@ -993,13 +976,11 @@ function handleHashChange() {
 
 function flushCurrentScroll() {
   flushScrollPosition(currentActiveHref.value)
-  recordReadingSnapshot(currentActiveHref.value)
 }
 
 function handleVisibilityChange() {
   if (document.visibilityState === 'hidden') {
     flushScrollPosition(currentActiveHref.value)
-    recordReadingSnapshot(currentActiveHref.value)
   }
 }
 function handleGlobalKeydown(e: KeyboardEvent) {
@@ -1128,11 +1109,6 @@ onMounted(async () => {
     // otherwise start at the top.
     await restoreDocScroll(currentActiveHref.value, scrollSwitchSeq)
   }
-  // R6: warm the recents store and record this launch as a visit so reloads
-  // keep the document pinned in 最近 / palette.
-  void ensureRecentsLoaded().then(() => {
-    touchRecent(currentActiveHref.value, { scrollY: readCurrentScrollY(), progress: readingProgress.value })
-  })
 
   if (window.innerWidth < 1100) {
     rightSideOpen.value = false

@@ -87,11 +87,10 @@
 - **验收**：大文档（1MB）切换 <100ms（不断言精确值，断言无 fetch 发生：spy `fetchDocContent`）；快捷键不与浏览器冲突（备选 Ctrl/Cmd+Shift+M，检查 manifest commands 占用）。
 - **估算**：S。**Phase-2 任一前端顺手**。
 
-## R6. 最近文档 N2（MarkView/Obsidian 对标，便宜）
+## R6. 最近文档 N2（MarkView/Obsidian 对标，便宜）— 已移除（T28）
 
-- **目标**：`chrome.storage.local` 存最近 20（复用 `normalizeScrollKey` 做 key，含 title + mtime + scrollY 快照）；Side 顶部“最近”分组 + palette 置顶。
-- **验收**：A→B→C 后最近列表顺序正确；配额爆时 LRU 淘汰（单测）；清数据不影响阅读。
-- **估算**：S。**Phase-2，R9（进度 v2）前置**（共用存储 shape，先定 schema）。
+> 产品决策：入口使用价值低，用户反馈不好用，完整移除不留死代码。
+> 按文档回位能力（scroll-memory）不受影响，仍由 R9 覆盖。
 
 ## R7. P2-1 文件夹全文检索（U10，WASM 索引）
 
@@ -111,10 +110,10 @@
 - **验收**：slug 单测 15 条（含中文/emoji/重复标题 `-1` 后缀）；跨重渲染稳定（Mermaid 重渲染后仍命中）；分享链接 `[manual]`。
 - **估算**：M。**Phase-2（t3 同人 nav-engineer，R2 之后串行，同改 App/Side）**。
 
-## R9. P2-3 阅读进度 v2（U3 延伸，R6 的 schema 复用）
+## R9. P2-3 阅读进度 v2（U3 延伸）
 
-- **目标**：TopHeader 现有 `readingProgress` 条 → 补 % 数字；文件夹树 resume badge（“读到 62%”）；“继续阅读”一键回位（读 scroll-memory 快照）；数据全在 `chrome.storage.local`。
-- **验收**：A 读到 60% → 切 B → 回 A 落点 ±24px（与 P0-1 同标）；badge 不闪烁（防抖写，复用 `scheduleSaveScrollPosition` 节奏）。
+- **目标**：TopHeader 现有 `readingProgress` 条 → 补 % 数字（scroll 实时值，非快照）；“继续阅读”即文档切换回位（读 scroll-memory 快照，±24px 内）。
+- **验收**：A 读到 60% → 切 B → 回 A 落点 ±24px（与 P0-1 同标）。Side 树 badge 与 palette 置顶随 R6 一并移除（T28）。
 - **估算**：M。**Phase-2（R6 同人/后串行）**。
 
 ## R10. 横向：fixture 方法论 + P2-4/P2-5 简述
@@ -123,7 +122,7 @@
 - **P2-4 大文档性能**：Mermaid/KaTeX 渐进渲染、大纲虚拟化、图片懒加载；1MB fixture 首绘 ≤2s（参考机留档）。**不进 Phase-2，进 Phase-3**。
 - **P2-5 主题包**：打印主题 + CN 字体栈 + WCAG AA 对比度审计。**不进 Phase-2，进 Phase-3**。
 - **测试约定（unit）**：`npm run test:unit` = tsc 单文件编译到 `tests/.tmp` + `node --test`，零新依赖。
-  - 被测模块须是无本地导入的叶子模块；跨模块复用（如 `recents.ts` 用 `scroll-memory.ts` 的 `normalizeScrollKey`）时，源码须写 `.js` 后缀 import（`./scroll-memory.js`），否则 Node ESM 解析失败（Vite 构建侧已验证兼容）。
+  - 被测模块须是无本地导入的叶子模块；跨模块复用确需本地导入时，源码须写 `.js` 后缀 import（如 `./scroll-memory.js`），否则 Node ESM 解析失败（Vite 构建侧须验证兼容）。
   - 新模块按此接线：tsc 输入与 `.test.mjs` 一并追加到 `test:unit` 脚本。
 
 ## Phase-2 任务拆分（给团队用，依赖已排好）

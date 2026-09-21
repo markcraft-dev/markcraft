@@ -38,16 +38,11 @@
         {{ item.content }}
       </span>
 
-      <!-- Active Indicator Dot, Resume Badge, or New Tab Action -->
+      <!-- Active Indicator Dot or New Tab Action -->
       <span
         v-if="item.active"
         class="w-1.5 h-1.5 rounded-full bg-[--primary-color] flex-shrink-0 ml-4px"
       ></span>
-      <span
-        v-else-if="resumeProgress !== undefined"
-        class="flex-shrink-0 ml-4px px-5px py-0.5 rounded-full text-10px font-mono font-medium text-[--primary-color] bg-[--primary-light] border border-[--primary-color]/20"
-        :title="`上次读到 ${resumeProgress}%`"
-      >{{ resumeProgress }}%</span>
       <span
         v-else-if="!item.isFolder"
         class="node-action opacity-0 group-hover:opacity-100 p-2px rounded hover:bg-[--bg-subtle] text-[--text-muted] hover:text-[--text-primary] transition-opacity flex-shrink-0 ml-4px"
@@ -65,7 +60,6 @@
         :key="child.id || child.href"
         :item="child"
         :depth="depth + 1"
-        :progress-map="progressMap"
         @toggle="(n) => $emit('toggle', n)"
         @select="(n) => $emit('select', n)"
         @open-new-tab="(n) => $emit('open-new-tab', n)"
@@ -77,19 +71,15 @@
 <script setup lang="ts">
 import SvgIcon from '@/components/SvgIcon.vue'
 import { computed } from 'vue'
-import { normalizeScrollKey } from '../core/scroll-memory'
 import type { TreeNodeItem } from '@/shared/types'
 
 const props = withDefaults(
   defineProps<{
     item: TreeNodeItem
     depth?: number
-    /** R9 resume badges: normalizeScrollKey href → progress 0–100. */
-    progressMap?: Record<string, number>
   }>(),
   {
-    depth: 0,
-    progressMap: undefined
+    depth: 0
   }
 )
 
@@ -103,14 +93,6 @@ const isMarkdownFile = computed(() => {
   const name = props.item.content.toLowerCase()
   // 与 folder.ts 的 MD_EXTENSIONS 清单保持一致（含 .mdx/.mdc/.markdown/.txt）
   return ['.md', '.mkd', '.markdown', '.txt', '.mdx', '.mdc'].some((ext) => name.endsWith(ext))
-})
-
-// R9 resume badge: files with a stored snapshot show "读到 N%" (0% hidden as
-// noise); the active row keeps its dot so two affordances never collide.
-const resumeProgress = computed<number | undefined>(() => {
-  if (props.item.isFolder || props.item.active || !props.progressMap) return undefined
-  const p = props.progressMap[normalizeScrollKey(props.item.href)]
-  return typeof p === 'number' && p > 0 ? Math.min(100, Math.round(p)) : undefined
 })
 
 const iconColorClass = computed(() => {

@@ -19,7 +19,7 @@
 
 | # | Check | Result |
 |---|---|---|
-| M1 | `npm run test:unit` (tsc compile of doc-url/sanitize/slug/recents + node --test doc-url/export-sanitize/slug/recents) | ✅ PASS — 37/37, 0 fail (tsc clean) |
+| M1 | `npm run test:unit` (tsc compile of doc-url/sanitize/slug + node --test doc-url/export-sanitize/slug/render-sanitize; recents suite removed with the feature, T28) | ✅ PASS — 36/36, 0 fail (tsc clean) |
 | M2 | Sanitizer string-stage vs every `xss.md` hostile vector (throwaway node script, not committed): 6 tag-strips (script/iframe/object/embed/link/meta), 5 URL blocks (incl. case evasion), 7 URL allows (relative/#anchor/http/file/blob/raster-data), `@import` strip with rule kept, title escape | ✅ PASS — ALL PASS |
 | M3 | R7 snippet construction is escape-then-mark (`search-index.ts` highlight builder escapes before wrapping `<mark>`) — code walk, no new behavior | ✅ PASS (walk) |
 | M4 | Full `pnpm run build` | ⏭️ SKIPPED by design — `scripts/build.mjs` wipes and regenerates tracked `dist/`; rebuild gates were green in T9–T14 and T15 must not dirty `dist/` (working tree already carries teammates' dist deltas, left untouched) |
@@ -69,10 +69,10 @@ for local-file items. Open fixtures via `file://` drag-drop or folder tree.
 - [ ] One-click retest (no fresh profile needed): Settings → 调试/Debug →
       [重新播放新手引导]/[Replay onboarding] → page reloads with the tour
       and save nudge showing again (Debug key count drops by the 2 seen
-      flags; scroll places, recents and settings untouched).
-- [ ] [清除全部本地状态并重载]/[Wipe local state & reload] → tree resume
-      badges and 最近 empty, scroll starts at top, onboarding replays;
-      preferences and granted file handles survive (Debug count → 0).
+      flags; scroll places and settings untouched).
+- [ ] [清除全部本地状态并重载]/[Wipe local state & reload] → scroll starts
+      at top, onboarding replays; preferences and granted file handles
+      survive (Debug count → 0).
 
 ### R3 — rich-text copy (`copy-fidelity.md`)
 
@@ -90,10 +90,11 @@ for local-file items. Open fixtures via `file://` drag-drop or folder tree.
 - [ ] 1MB doc: render↔RAW instant, zero network (watch `fetchDocContent`), same-key
       scroll restored, `Ctrl/Cmd+Shift+M` works, no manifest shortcut conflict.
 
-### R6/R9 — recents + progress
+### R9 — reading progress (recents removed, T28)
 
-- [ ] Open A→B→C: Side “最近” order C,B,A; resume badges show %; “continue”
-      lands ±24px. (Unit: 37/37 incl. LRU/quota.)
+- [ ] Header capsule shows live % while scrolling; A read to 60% → switch
+      to B → back to A lands on the remembered place ±24px (scroll-memory
+      restore, recents-independent).
 
 ### R7 — full-text search (G2)
 
