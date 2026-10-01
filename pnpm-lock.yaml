@@ -33,8 +33,8 @@ importers:
         specifier: ^2.0.0
         version: 2.0.0
       markdown-it-deflist:
-        specifier: ^3.0.0
-        version: 3.0.1
+        specifier: ^4.0.0
+        version: 4.0.0
       markdown-it-emoji:
         specifier: ^3.0.0
         version: 3.1.0
@@ -1439,8 +1439,8 @@ packages:
   markdown-it-abbr@2.0.0:
     resolution: {integrity: sha512-of7C8pXSjXjDojW4neNP+jD7inUYH/DO0Ca+K/4FUEccg0oHAEX/nfscw0jfz66PJbYWOAT9U8mjO21X5p6aAw==}
 
-  markdown-it-deflist@3.0.1:
-    resolution: {integrity: sha512-pPtXxihDMi9jrwLLQ+Jra/FM20F/FFJWiVjXf0Js6Lwp7LFj+MuK6cUJNMVTRL+n9d/JqF4MEqYZwSMgVodK5g==}
+  markdown-it-deflist@4.0.0:
+    resolution: {integrity: sha512-06186ZWDwNLg638THD70MxBeFrDMF0+nL7IWU/qwCGHGOcUIm4MTYXbfjpv0ooWnVjkSnAjW8msKaOQmNRfY6Q==}
 
   markdown-it-emoji@3.1.0:
     resolution: {integrity: sha512-NhmMEH2ywduD4Nty1E8uB5NqfLhAT1VR0dyvoJyStKOqCzbZmVdn/+8wj7zpDsb/fLBikpCPsWwxqKlvMmbz4g==}
@@ -3142,7 +3142,7 @@ snapshots:
 
   markdown-it-abbr@2.0.0: {}
 
-  markdown-it-deflist@3.0.1: {}
+  markdown-it-deflist@4.0.0: {}
 
   markdown-it-emoji@3.1.0: {}
 
