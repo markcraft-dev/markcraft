@@ -17,13 +17,13 @@
     "test:unit": "pnpm exec tsc src/content/core/doc-url.ts src/content/core/sanitize.ts src/content/core/slug.ts --target es2022 --module es2022 --outDir tests/.tmp --skipLibCheck && node --test tests/doc-url.test.mjs tests/export-sanitize.test.mjs tests/slug.test.mjs tests/render-sanitize.test.mjs"
   },
   "dependencies": {
-    "@mdit/plugin-alert": "^1.0.3",
+    "@mdit/plugin-alert": "^2.0.2",
     "@traptitech/markdown-it-katex": "^3.6.0",
     "github-markdown-css": "^5.9.0",
     "highlight.js": "^11.9.0",
     "katex": "^0.16.9",
     "lodash-es": "^4.17.21",
-    "markdown-it": "^14.3.2",
+    "markdown-it": "^15.0.2",
     "markdown-it-abbr": "^2.0.0",
     "markdown-it-deflist": "^3.0.0",
     "markdown-it-emoji": "^3.0.0",
