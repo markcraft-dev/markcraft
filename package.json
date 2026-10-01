@@ -45,7 +45,7 @@
     "@unocss/vite": "^0.58.6",
     "@vitejs/plugin-vue": "^5.0.4",
     "typescript": "^5.3.3",
-    "unocss": "^0.58.6",
+    "unocss": "^66.10.5",
     "vite": "^5.1.4",
     "vite-plugin-top-level-await": "^1.6.0",
     "vite-plugin-wasm": "^3.6.0"
